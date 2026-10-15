@@ -6,3 +6,4 @@ pipeline/out/
 __pycache__/
 *.egg-info/
 .pytest_cache/
+pipeline/tools/

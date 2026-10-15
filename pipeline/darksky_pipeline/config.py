@@ -35,14 +35,16 @@ OVERTURE_S3_ROOT = "s3://overturemaps-us-west-2/release"
 MIN_PLACE_CONFIDENCE = 0.6
 SPOT_CATEGORIES = frozenset({
     "park", "state_park", "national_park", "campground", "beach",
-    "observatory", "nature_reserve", "scenic_viewpoint", "boat_launch",
+    "observatory", "nature_reserve", "scenic_viewpoint", "boat_launch", "boating_place",
 })
-LIKELY_CATEGORIES = frozenset({"campground", "observatory", "boat_launch"})
-PARKING_CATEGORIES = frozenset({"parking", "parking_lot"})
+LIKELY_CATEGORIES = frozenset({"campground", "observatory", "boat_launch", "boating_place"})
+PARKING_CATEGORIES = frozenset({"parking", "parking_lot", "park_and_ride"})
 AMENITY_CATEGORIES: dict[str, frozenset[str]] = {
-    "restroom": frozenset({"public_toilet", "restroom"}),
-    "fuel": frozenset({"gas_station"}),
-    "food": frozenset({"restaurant", "fast_food_restaurant", "cafe", "coffee_shop", "diner"}),
+    "restroom": frozenset({"public_restroom", "public_toilet", "restroom"}),
+    "fuel": frozenset({"gas_station", "truck_gas_station"}),
+    "food": frozenset({"restaurant", "fast_food_restaurant", "cafe", "coffee_shop", "diner",
+                       "pizza_restaurant", "american_restaurant", "burger_restaurant",
+                       "bar_and_grill_restaurant"}),
 }
 AMENITY_RADIUS_M = 5_000
 
@@ -99,6 +101,9 @@ HIGHWAY_MID_PENALTY = 0.15
 LOW_GLARE_MAX = 0.2
 
 # --- Horizon ------------------------------------------------------------------
+# Overture ships coarse low-zoom land-cover generalizations on top of the detailed
+# polygons; keep only the detailed band so horizon fractions are not double-counted.
+LAND_COVER_MIN_ZOOM = 8
 HORIZON_RADIUS_M = 1_000
 HORIZON_TILE_M = 10_000  # land-cover/water polygons are pre-cut to this grid for fast per-point queries
 OPEN_COVER_SUBTYPES = frozenset({"grass", "crop", "shrub", "barren", "wetland", "moss", "snow"})

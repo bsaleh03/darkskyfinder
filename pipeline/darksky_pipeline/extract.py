@@ -7,7 +7,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from .config import DIVISION_SUBTYPES, OVERTURE_S3_ROOT, PARK_SUBTYPES, BBox
+from .config import DIVISION_SUBTYPES, LAND_COVER_MIN_ZOOM, OVERTURE_S3_ROOT, PARK_SUBTYPES, BBox
 from .util import atomic_path
 
 
@@ -26,10 +26,11 @@ def _in_list(values) -> str:
 
 THEMES: dict[str, ThemeSpec] = {
     "places": ThemeSpec("places", "place",
-                        "id, names.primary AS name, categories.primary AS category, confidence", "point"),
+                        "id, names.primary AS name, taxonomy.primary AS category, confidence", "point"),
     "land_use": ThemeSpec("base", "land_use", "id, names.primary AS name, subtype, class", "wkb",
                           where=_in_list(PARK_SUBTYPES)),
-    "land_cover": ThemeSpec("base", "land_cover", "id, subtype", "wkb"),
+    "land_cover": ThemeSpec("base", "land_cover", "id, subtype", "wkb",
+                            where=f"cartography.min_zoom >= {LAND_COVER_MIN_ZOOM}"),
     "water": ThemeSpec("base", "water", "id, subtype, class", "wkb"),
     "buildings": ThemeSpec("buildings", "building", "", "point"),
     "segments": ThemeSpec("transportation", "segment",

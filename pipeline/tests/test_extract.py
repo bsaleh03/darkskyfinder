@@ -91,3 +91,7 @@ def test_cache_write_is_atomic(overture_root, tmp_path, monkeypatch):
         extract_theme(con, "places", REGION_BBOX, RELEASE, source_root=overture_root.as_posix(), cache_dir=tmp_path)
     assert not (tmp_path / "places.parquet").exists()
     assert list(tmp_path.iterdir()) == []  # no stray .tmp
+
+
+def test_land_cover_keeps_only_detailed_zoom_band(overture_frames):
+    assert set(overture_frames["land_cover"]["id"]) == {"lc_grass", "lc_forest"}

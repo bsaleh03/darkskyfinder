@@ -46,8 +46,11 @@ LAND_USE = [
 ]
 
 LAND_COVER = [
-    ("lc_grass", "grass", "POLYGON((-84.32 41.80, -84.18 41.80, -84.18 41.87, -84.32 41.87, -84.32 41.80))"),
-    ("lc_forest", "forest", "POLYGON((-84.17 41.77, -84.13 41.77, -84.13 41.79, -84.17 41.79, -84.17 41.77))"),
+    # id, subtype, cartography.min_zoom, wkt
+    ("lc_grass", "grass", 8, "POLYGON((-84.32 41.80, -84.18 41.80, -84.18 41.87, -84.32 41.87, -84.32 41.80))"),
+    ("lc_forest", "forest", 8, "POLYGON((-84.17 41.77, -84.13 41.77, -84.13 41.79, -84.17 41.79, -84.17 41.77))"),
+    # Coarse low-zoom generalization covering everything: must be ignored (else Hudson reads "enclosed").
+    ("lc_coarse_forest", "forest", 0, "POLYGON((-84.40 41.75, -84.00 41.75, -84.00 42.05, -84.40 42.05, -84.40 41.75))"),
 ]
 
 WATER = [
@@ -106,7 +109,7 @@ def build_overture_fixture(root: Path) -> None:
     con.load_extension("spatial")
 
     _write(con, root, "places", "place", " UNION ALL ".join(
-        f"SELECT '{i}' AS id, {{'primary': {_q(n)}}} AS names, {{'primary': '{c}'}} AS categories, "
+        f"SELECT '{i}' AS id, {{'primary': {_q(n)}}} AS names, {{'primary': '{c}'}} AS taxonomy, "
         f"{conf}::DOUBLE AS confidence, ST_Point({lon}, {lat}) AS geometry"
         for i, n, c, conf, lon, lat in PLACES))
 
@@ -116,8 +119,10 @@ def build_overture_fixture(root: Path) -> None:
         for i, n, st, cl, wkt in LAND_USE))
 
     _write(con, root, "base", "land_cover", " UNION ALL ".join(
-        f"SELECT '{i}' AS id, '{st}' AS subtype, ST_GeomFromText('{wkt}') AS geometry"
-        for i, st, wkt in LAND_COVER))
+        f"SELECT '{i}' AS id, '{st}' AS subtype, "
+        f"{{'prominence': 1, 'min_zoom': {mz}, 'max_zoom': {7 if mz == 0 else 15}, 'sort_key': 0}} AS cartography, "
+        f"ST_GeomFromText('{wkt}') AS geometry"
+        for i, st, mz, wkt in LAND_COVER))
 
     _write(con, root, "base", "water", " UNION ALL ".join(
         f"SELECT '{i}' AS id, '{st}' AS subtype, '{cl}' AS class, ST_GeomFromText('{wkt}') AS geometry"
