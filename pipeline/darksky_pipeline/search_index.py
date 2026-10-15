@@ -9,7 +9,7 @@ from typing import Iterable
 import pandas as pd
 
 from .config import DIVISION_SUBTYPES
-from .util import as_list, wkb_to_geoms
+from .util import as_list, atomic_path, wkb_to_geoms
 
 MIN_SEARCH_PLACE_CONFIDENCE = 0.5
 
@@ -41,18 +41,16 @@ def search_rows(places: pd.DataFrame, addresses: pd.DataFrame, divisions: pd.Dat
 
 
 def build_search_index(rows: Iterable[Row], path: Path) -> None:
-    path = Path(path)
-    if path.exists():
-        path.unlink()
-    con = sqlite3.connect(path)
-    try:
-        con.execute("CREATE VIRTUAL TABLE search USING fts5("
-                    "name, kind UNINDEXED, lat UNINDEXED, lon UNINDEXED, "
-                    "tokenize='unicode61 remove_diacritics 2')")
-        con.executemany("INSERT INTO search (name, kind, lat, lon) VALUES (?, ?, ?, ?)", rows)
-        con.commit()
-    finally:
-        con.close()
+    with atomic_path(path) as tmp:
+        con = sqlite3.connect(tmp)
+        try:
+            con.execute("CREATE VIRTUAL TABLE search USING fts5("
+                        "name, kind UNINDEXED, lat UNINDEXED, lon UNINDEXED, "
+                        "tokenize='unicode61 remove_diacritics 2')")
+            con.executemany("INSERT INTO search (name, kind, lat, lon) VALUES (?, ?, ?, ?)", rows)
+            con.commit()
+        finally:
+            con.close()
 
 
 def query(path: Path, text: str, limit: int = 10) -> list[dict]:

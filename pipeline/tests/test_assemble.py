@@ -70,3 +70,19 @@ def test_write_rejects_nan(tmp_path):
     doc = build_spots_document("se_mi", "R1", [{"id": "x", "sqm": math.nan}], generated_at="t")
     with pytest.raises(ValueError):
         write_spots_json(doc, tmp_path / "bad.json")
+
+
+def test_write_is_atomic(tmp_path, monkeypatch):
+    import os
+
+    def boom(src, dst):
+        raise OSError("disk full")
+
+    path = tmp_path / "spots.json"
+    path.write_text("old", encoding="utf-8")
+    monkeypatch.setattr(os, "replace", boom)
+    doc = build_spots_document("se_mi", "R1", [assemble_spot(CAND, VP, GLARE, HORIZON, AMEN, None)], generated_at="t")
+    with pytest.raises(OSError):
+        write_spots_json(doc, path)
+    assert path.read_text(encoding="utf-8") == "old"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["spots.json"]

@@ -52,3 +52,12 @@ def test_rebuild_overwrites(tmp_path):
     build_search_index([("Alpha", "place", 1.0, 2.0)], path)
     build_search_index([("Beta", "place", 1.0, 2.0)], path)
     assert query(path, "alpha") == [] and query(path, "beta")[0]["name"] == "Beta"
+
+
+def test_failed_rebuild_keeps_previous_index(tmp_path):
+    path = tmp_path / "s.sqlite"
+    build_search_index([("Alpha", "place", 1.0, 2.0)], path)
+    with pytest.raises(Exception):
+        build_search_index([("Broken",)], path)  # wrong arity -> sqlite error mid-build
+    assert query(path, "alpha")[0]["name"] == "Alpha"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["s.sqlite"]

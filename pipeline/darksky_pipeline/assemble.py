@@ -12,6 +12,7 @@ from .darkness import bortle, sky_label
 from .features import Glare, Horizon
 from .roads import ViewingPoint
 from .spots import Candidate
+from .util import atomic_path
 
 SCHEMA_VERSION = 1
 
@@ -82,4 +83,5 @@ def build_spots_document(metro_key: str, release: str, spots: list[dict], genera
 
 def write_spots_json(doc: dict, path: Path) -> None:
     text = json.dumps(doc, allow_nan=False, ensure_ascii=False, separators=(",", ":"))
-    Path(path).write_text(text, encoding="utf-8")
+    with atomic_path(path) as tmp:
+        tmp.write_text(text, encoding="utf-8")

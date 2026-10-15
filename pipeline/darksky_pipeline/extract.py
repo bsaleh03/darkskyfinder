@@ -8,6 +8,7 @@ import duckdb
 import pandas as pd
 
 from .config import DIVISION_SUBTYPES, OVERTURE_S3_ROOT, PARK_SUBTYPES, BBox
+from .util import atomic_path
 
 
 @dataclass(frozen=True)
@@ -75,5 +76,6 @@ def extract_theme(con: duckdb.DuckDBPyConnection, key: str, bbox: BBox, release:
     df = con.execute(build_query(theme_glob(source_root, release, spec), spec, bbox)).df()
     if cache is not None:
         cache.parent.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(cache, index=False)
+        with atomic_path(cache) as tmp:
+            df.to_parquet(tmp, index=False)
     return df

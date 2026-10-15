@@ -75,3 +75,19 @@ def test_query_uses_bbox_intersection_filter():
     sql = build_query(theme_glob("s3://x", "R", THEMES["places"]), THEMES["places"], (-1.0, -2.0, 3.0, 4.0))
     assert "bbox.xmax >= -1.0" in sql and "bbox.xmin <= 3.0" in sql
     assert "bbox.ymax >= -2.0" in sql and "bbox.ymin <= 4.0" in sql
+
+
+def test_cache_write_is_atomic(overture_root, tmp_path, monkeypatch):
+    import os
+
+    import pytest
+
+    def boom(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", boom)
+    con = connect()
+    with pytest.raises(OSError):
+        extract_theme(con, "places", REGION_BBOX, RELEASE, source_root=overture_root.as_posix(), cache_dir=tmp_path)
+    assert not (tmp_path / "places.parquet").exists()
+    assert list(tmp_path.iterdir()) == []  # no stray .tmp
