@@ -100,6 +100,7 @@ LOW_GLARE_MAX = 0.2
 
 # --- Horizon ------------------------------------------------------------------
 HORIZON_RADIUS_M = 1_000
+HORIZON_TILE_M = 10_000  # land-cover/water polygons are pre-cut to this grid for fast per-point queries
 OPEN_COVER_SUBTYPES = frozenset({"grass", "crop", "shrub", "barren", "wetland", "moss", "snow"})
 CLOSED_COVER_SUBTYPES = frozenset({"forest", "mangrove"})
 HORIZON_OPEN_MIN = 0.5

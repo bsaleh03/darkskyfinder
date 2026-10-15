@@ -69,17 +69,52 @@ def classify_horizon(open_frac: float, closed_frac: float) -> str:
     return "partial"
 
 
+_POLYGONAL = (3, 6)  # Polygon, MultiPolygon
+
+
+def _polygonal_parts(geoms: np.ndarray) -> np.ndarray:
+    """Polygonal members of each geometry; GeometryCollections (e.g. from make_valid) are opened up."""
+    geoms = np.asarray(geoms, dtype=object)
+    if len(geoms) == 0:
+        return geoms
+    direct = geoms[np.isin(shapely.get_type_id(geoms), _POLYGONAL)]
+    coll = geoms[shapely.get_type_id(geoms) == 7]
+    if len(coll):
+        parts = shapely.get_parts(coll)
+        direct = np.concatenate([direct, parts[np.isin(shapely.get_type_id(parts), _POLYGONAL)]])
+    return direct[~shapely.is_empty(direct)]
+
+
 def _polygons(df: pd.DataFrame, projector: Projector) -> np.ndarray:
     if len(df) == 0:
         return np.array([], dtype=object)
-    geoms = shapely.make_valid(projector.geoms_to_xy(wkb_to_geoms(df["wkb"])))
-    return geoms[np.isin(shapely.get_type_id(geoms), [3, 6])]  # Polygon, MultiPolygon
+    return _polygonal_parts(shapely.make_valid(projector.geoms_to_xy(wkb_to_geoms(df["wkb"]))))
+
+
+def _tile(geoms: np.ndarray, tile_m: float) -> np.ndarray:
+    """Cut polygons spanning more than one tile of a tile_m grid into per-tile pieces (done once),
+    so per-query intersection/union work is bounded by the tile size, not the polygon size."""
+    if len(geoms) == 0:
+        return geoms
+    b = shapely.bounds(geoms)
+    span = (np.floor(b[:, 2] / tile_m) > np.floor(b[:, 0] / tile_m)) | (np.floor(b[:, 3] / tile_m) > np.floor(b[:, 1] / tile_m))
+    if not span.any():
+        return geoms
+    big = geoms[span]
+    minx, miny, maxx, maxy = shapely.total_bounds(big)
+    xs = np.arange(np.floor(minx / tile_m) * tile_m, maxx, tile_m)
+    ys = np.arange(np.floor(miny / tile_m) * tile_m, maxy, tile_m)
+    X, Y = np.meshgrid(xs, ys)
+    tiles = shapely.box(X.ravel(), Y.ravel(), X.ravel() + tile_m, Y.ravel() + tile_m)
+    gi, ti = shapely.STRtree(tiles).query(big, predicate="intersects")
+    pieces = _polygonal_parts(shapely.intersection(big[gi], tiles[ti]))
+    return np.concatenate([geoms[~span], pieces])
 
 
 class _Layer:
-    def __init__(self, geoms: np.ndarray) -> None:
-        self.geoms = geoms
-        self.tree = shapely.STRtree(geoms) if len(geoms) else None
+    def __init__(self, geoms: np.ndarray, tile_m: float = config.HORIZON_TILE_M) -> None:
+        self.geoms = _tile(np.asarray(geoms, dtype=object), tile_m)
+        self.tree = shapely.STRtree(self.geoms) if len(self.geoms) else None
 
     def fraction(self, circle) -> float:
         if self.tree is None:

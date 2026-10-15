@@ -42,3 +42,51 @@ def test_horizon_with_no_layers(overture_frames, projector):
     model = HorizonModel(overture_frames["land_cover"].iloc[0:0], overture_frames["water"].iloc[0:0], projector)
     h = model.at(*projector.to_xy(*HUDSON))
     assert (h.open_frac, h.closed_frac, h.water_frac, h.cls) == (0.0, 0.0, 0.0, "partial")
+
+
+def _water(wkts):
+    import pandas as pd
+    import shapely
+    return pd.DataFrame([{"id": f"w{i}", "subtype": "lake", "class": "lake", "wkb": shapely.to_wkb(shapely.from_wkt(w))}
+                         for i, w in enumerate(wkts)], columns=["id", "subtype", "class", "wkb"])
+
+
+def _no_cover(overture_frames):
+    return overture_frames["land_cover"].iloc[0:0]
+
+
+def test_invalid_spiked_polygon_still_counts(overture_frames, projector):
+    # M4: make_valid turns this into GEOMETRYCOLLECTION(POLYGON, LINESTRING); the polygon must be kept.
+    lon, lat = HUDSON
+    spiked = (f"POLYGON(({lon - 0.03} {lat - 0.03}, {lon + 0.03} {lat - 0.03}, {lon + 0.03} {lat + 0.03}, "
+              f"{lon - 0.03} {lat + 0.03}, {lon - 0.03} {lat - 0.03}, {lon - 0.06} {lat - 0.06}, "
+              f"{lon - 0.03} {lat - 0.03}))")
+    model = HorizonModel(_no_cover(overture_frames), _water([spiked]), projector)
+    assert model.at(*projector.to_xy(*HUDSON)).water_frac > 0.99
+
+
+def test_bowtie_polygon_still_counts(overture_frames, projector):
+    lon, lat = HUDSON
+    d = 0.03
+    bowtie = (f"POLYGON(({lon - d} {lat - d}, {lon + d} {lat + d}, {lon + d} {lat - d}, "
+              f"{lon - d} {lat + d}, {lon - d} {lat - d}))")
+    model = HorizonModel(_no_cover(overture_frames), _water([bowtie]), projector)
+    assert 0.3 < model.at(*projector.to_xy(*HUDSON)).water_frac < 0.7
+
+
+def test_huge_polygons_are_tiled_and_fractions_unchanged(overture_frames, projector):
+    # I4: a 60 km lake is cut into <= HORIZON_TILE_M pieces once, so queries never union it whole.
+    import numpy as np
+    import shapely
+    from darksky_pipeline import config
+    lon, lat = HUDSON
+    big = f"POLYGON(({lon - 0.4} {lat - 0.3}, {lon} {lat - 0.3}, {lon} {lat + 0.3}, {lon - 0.4} {lat + 0.3}, {lon - 0.4} {lat - 0.3}))"
+    model = HorizonModel(_no_cover(overture_frames), _water([big]), projector)
+    b = shapely.bounds(model._water.geoms)
+    assert len(model._water.geoms) > 1
+    assert np.all(b[:, 2] - b[:, 0] <= config.HORIZON_TILE_M + 1e-6)
+    assert np.all(b[:, 3] - b[:, 1] <= config.HORIZON_TILE_M + 1e-6)
+    x, y = projector.to_xy(lon, lat)  # on the lake's east edge: about half the circle is water
+    assert model.at(x, y).water_frac == pytest.approx(0.5, abs=0.03)
+    inner = model.at(*projector.to_xy(lon - 0.2, lat))
+    assert inner.water_frac == pytest.approx(1.0, abs=1e-6)
