@@ -1,1 +1,10 @@
 .superpowers/
+
+pipeline/.venv/
+pipeline/data/
+pipeline/out/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+pipeline/tools/
+pipeline/*.log

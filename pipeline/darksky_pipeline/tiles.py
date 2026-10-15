@@ -1,0 +1,60 @@
+"""Basemap PMTiles extraction (Overture) and light-pollution overlay raster."""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+import numpy as np
+import rasterio
+from rasterio.crs import CRS
+from rasterio.transform import from_origin
+
+from . import config
+from .config import BBox
+from .darkness import DarknessGrid
+
+# t (0 = natural sky, 1 = city) -> RGBA. Indigo/violet/amber palette from the spec.
+_COLOR_STOPS = np.array([
+    [0.0, 0, 0, 0, 0],
+    [0.2, 58, 47, 110, 90],
+    [0.5, 165, 139, 224, 140],
+    [0.8, 245, 201, 107, 190],
+    [1.0, 255, 244, 214, 220],
+], dtype=np.float64)
+
+
+def basemap_extract_commands(tiles_release: str, bbox: BBox, out_dir: Path, metro_key: str, maxzoom: int = 14,
+                             url_template: str = config.OVERTURE_TILES_URL) -> list[list[str]]:
+    w, s, e, n = bbox
+    return [["pmtiles", "extract", url_template.format(release=tiles_release, theme=theme),
+             str(Path(out_dir) / f"basemap_{metro_key}_{theme}.pmtiles"),
+             f"--bbox={w},{s},{e},{n}", f"--maxzoom={maxzoom}"]
+            for theme in config.OVERTURE_TILE_THEMES]
+
+
+def sqm_to_rgba(sqm: np.ndarray) -> np.ndarray:
+    sqm = np.asarray(sqm, dtype=np.float64)
+    span = config.NATURAL_SQM - config.LIGHTPOLLUTION_BRIGHT_SQM
+    t = np.clip((config.NATURAL_SQM - np.nan_to_num(sqm, nan=config.NATURAL_SQM)) / span, 0.0, 1.0)
+    out = np.empty(sqm.shape + (4,), dtype=np.uint8)
+    for ch in range(4):
+        out[..., ch] = np.round(np.interp(t, _COLOR_STOPS[:, 0], _COLOR_STOPS[:, ch + 1])).astype(np.uint8)
+    return out
+
+
+def write_lightpollution_tif(grid: DarknessGrid, path: Path) -> None:
+    rgba = sqm_to_rgba(grid.sqm)
+    h, w = grid.sqm.shape
+    with rasterio.open(path, "w", driver="GTiff", height=h, width=w, count=4, dtype="uint8",
+                       crs=CRS.from_epsg(grid.epsg), transform=from_origin(grid.x0, grid.y0, grid.res, grid.res),
+                       photometric="RGB", alpha="YES") as dst:
+        dst.write(np.moveaxis(rgba, -1, 0))
+
+
+def lightpollution_pmtiles_command(tif: Path, out: Path, minzoom: int = 6, maxzoom: int = 11) -> list[str]:
+    return ["rio", "pmtiles", str(tif), str(out), "--format", "PNG", "--zoom-levels", f"{minzoom}..{maxzoom}", "--rgba"]
+
+
+def run_commands(cmds: list[list[str]]) -> None:
+    for cmd in cmds:
+        subprocess.run(cmd, check=True)

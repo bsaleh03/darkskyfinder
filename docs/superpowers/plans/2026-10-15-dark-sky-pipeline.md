@@ -3173,6 +3173,10 @@ Expected: a sorted list of release folders. Use the newest as `<R>` for every co
 Run: `.venv/Scripts/python -m darksky_pipeline.probe categories --metro se_mi --release <R>`
 Expected: category/count table. For each name in `SPOT_CATEGORIES`, `LIKELY_CATEGORIES`, `PARKING_CATEGORIES`, `AMENITY_CATEGORIES` that does not appear, replace it in `config.py` with the matching category shown (e.g. if the table shows `public_restroom` rather than `public_toilet`, use that). Re-run `.venv/Scripts/python -m pytest` (fixture categories are independent of these changes only if you keep `park`, `campground`, `boat_launch`, `parking`, `gas_station`, `restaurant`; if you remove any of those, update `tests/overture_fixture.py` to the new names in the same commit).
 
+Also check, from the cached parquet in `data/raw/se_mi/<R>/` (e.g. `duckdb -c "SELECT subtype, class, count(*) FROM 'land_use.parquet' GROUP BY ALL ORDER BY 3 DESC"`):
+- land-use `class` values inside `PARK_SUBTYPES` — extend `LAND_USE_CLASS_DENYLIST` with floodlit/closed classes (sports pitches, stadiums, etc.) under their real names;
+- whether land cover contains overlapping per-zoom generalizations (cartography min/max zoom columns). If so, restrict the land-cover extract to the highest-detail band so horizon fractions are not double-counted.
+
 - [ ] **Step 4: First non-strict build for SE MI (no tiles)**
 
 Run: `.venv/Scripts/python -m darksky_pipeline.build --metro se_mi --release <R> --viirs data/viirs/vnl_annual.tif --skip-tiles --no-strict`

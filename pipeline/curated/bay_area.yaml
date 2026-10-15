@@ -1,0 +1,25 @@
+# Curated facts for SF Bay Area spots, keyed by Overture GERS ID (release 2026-09-23.1).
+# Find IDs with: python -m darksky_pipeline.probe find --metro bay_area --release <R> --name "<name>"
+# Keys: id, label, verified, dark_sky_place, access_note, unavailable, unavailable_reason, hidden
+#
+# 2026-10 review: no Dark Sky designation could be confirmed from an official source for
+# Pinnacles NP or Henry W. Coe SP - check darksky.org's Places directory before setting
+# dark_sky_place. Candidate ids: Pinnacles NP 4d619bc0-d30c-4dbe-9f8b-079cf06c1a39,
+# Henry W. Coe SP 1575c094-d1f9-4099-80a3-a49d821e2301. Mt Tamalpais / Mt Diablo have gate
+# closing hours - leave unverified unless an official source documents night access.
+spots:
+  - id: 0a53c5ea-0e4f-4760-8cd4-7ebb1f5295ad
+    label: "Pinnacles National Park (misplaced record: San Jose)"
+    hidden: true
+  - id: 9dcb24c7-de2f-43d6-9cfa-70bc16caacc2
+    label: "Pinnacles National Park (misplaced record: Carmel-by-the-Sea)"
+    hidden: true
+  - id: f96058e1-605f-4693-a29a-f956bc7038b1
+    label: "Pinnacles National Park (misplaced record: Hollister)"
+    hidden: true
+  - id: 29572c61-285a-46b0-89d9-66e38d58b28c
+    label: "Pinnacles National Park (misplaced record: north San Benito County (~35 km N of park))"
+    hidden: true
+  - id: bc94906b-0803-4e17-882f-ba961c915e3f
+    label: "Pinnacles National Park (misplaced record: Santa Clara County (~75 km NW of park))"
+    hidden: true
