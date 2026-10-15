@@ -26,13 +26,15 @@ def test_sqm_to_rgba_endpoints_and_monotonic_alpha():
     assert tuple(rgba[5]) == (0, 0, 0, 0)
 
 
-def test_write_lightpollution_tif(darkness_grid, tmp_path):
+def test_write_lightpollution_tif(darkness_grid, tmp_path, caplog):
     path = tmp_path / "lp.tif"
     write_lightpollution_tif(darkness_grid, path)
     with rasterio.open(path) as src:
         assert src.count == 4 and src.dtypes[0] == "uint8"
         assert src.crs.to_epsg() == darkness_grid.epsg
         assert (src.height, src.width) == darkness_grid.sqm.shape
+        assert src.colorinterp[3].name == "alpha"
+    assert not [r for r in caplog.records if "GDAL signalled an error" in r.getMessage()]
 
 
 def test_lightpollution_command():

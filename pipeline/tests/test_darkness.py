@@ -91,7 +91,7 @@ def test_sample_radiance_city_vs_hudson(darkness_grid, projector):
 def test_edge_glow_from_outside_region(tmp_path, projector):
     # Bright blob ~4 km east of the region's east edge (-84.00).
     tif = write_viirs_fixture(tmp_path / "edge.tif", blobs=((-83.95, 41.90, 0.03, 60.0),), with_bad_values=False)
-    grid = build_darkness_grid(tif, REGION_BBOX, TEST_EPSG)
+    grid = build_darkness_grid(tif, REGION_BBOX, TEST_EPSG, k=0.5)  # fixed k: tests padding, not calibration
     east = grid.sample(*projector.to_xy(-84.01, 41.90))[0]
     west = grid.sample(*projector.to_xy(-84.39, 41.90))[0]
     assert west - east > 1.0

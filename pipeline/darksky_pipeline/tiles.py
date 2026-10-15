@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
-from rasterio.enums import ColorInterp
 from rasterio.transform import from_origin
 
 from . import config
@@ -48,9 +47,8 @@ def write_lightpollution_tif(grid: DarknessGrid, path: Path) -> None:
     h, w = grid.sqm.shape
     with rasterio.open(path, "w", driver="GTiff", height=h, width=w, count=4, dtype="uint8",
                        crs=CRS.from_epsg(grid.epsg), transform=from_origin(grid.x0, grid.y0, grid.res, grid.res),
-                       photometric="RGB") as dst:
+                       photometric="RGB", alpha="YES") as dst:
         dst.write(np.moveaxis(rgba, -1, 0))
-        dst.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
 
 
 def lightpollution_pmtiles_command(tif: Path, out: Path, minzoom: int = 6, maxzoom: int = 11) -> list[str]:

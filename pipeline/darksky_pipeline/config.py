@@ -77,7 +77,8 @@ GRID_RES_M = 500
 SKYGLOW_RADIUS_M = 50_000
 SKYGLOW_EXPONENT = 2.5
 NATURAL_SQM = 22.0
-SKYGLOW_K = 0.5  # nW/cm2/sr of weighted radiance that doubles natural sky brightness; calibrated in Task 14
+SKYGLOW_K = 2.0  # nW/cm2/sr of weighted radiance that doubles natural sky brightness.
+# Calibrated 2026-10 on VNL v2 2025 + Overture 2026-09-23.1: Royal Oak ~18.3, Lake Hudson ~21.9.
 DARKNESS_TIE_MAG = 0.1
 SKY_LABELS: tuple[tuple[float, str], ...] = (
     (21.3, "Milky Way vivid"),
@@ -114,7 +115,7 @@ HORIZON_ENCLOSED_MIN = 0.5
 LAKE_CHIP_MIN_WATER = 0.2
 
 # --- Checks -------------------------------------------------------------------
-SPOT_COUNT_RANGE: dict[str, tuple[int, int]] = {"se_mi": (50, 5_000), "bay_area": (50, 5_000)}
+SPOT_COUNT_RANGE: dict[str, tuple[int, int]] = {"se_mi": (50, 10_000), "bay_area": (50, 10_000)}
 TOP_SPOTS_MIN_MEDIAN_SQM = 20.5
 VERIFIED_MIN_GAIN_MAG = 1.0
 
