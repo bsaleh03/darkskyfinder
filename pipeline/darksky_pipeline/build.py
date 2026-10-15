@@ -45,6 +45,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     projector = Projector(metro.utm_epsg)
+    region = projector.region_xy(metro.bbox)
 
     log.info("extracting Overture %s for %s", release, metro.key)
     con = connect()
@@ -68,7 +69,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
 
     spots, dropped = [], []
     for c in candidates:
-        vp = find_viewing_point(c.area, roads, grid, projector, parking_xy)
+        vp = find_viewing_point(c.area, roads, grid, projector, parking_xy, region=region)
         if vp is None:
             dropped.append(c.id)
             continue

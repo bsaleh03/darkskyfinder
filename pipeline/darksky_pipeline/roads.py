@@ -67,39 +67,67 @@ class ViewingPoint:
     paved: bool
 
 
-def sample_points(area: BaseGeometry, roads: RoadNetwork, parking_xy: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    empty = (np.empty((0, 2)), np.empty(0, dtype=np.int64))
+def _sample(area: BaseGeometry, roads: RoadNetwork, parking_xy: np.ndarray,
+            region: BaseGeometry | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Candidate viewing points: (xy, road index, is-parking mask).
+
+    Points come from drivable, non-highway roads within ACCESS_SEARCH_M of `area` (clipped to
+    `region` when given), sampled every ROAD_SAMPLE_STEP_M, plus parking places in that zone
+    (snapped to the nearest such road for class/paved). Road samples are thinned to the
+    MAX_VIEWING_CANDIDATES budget; parking points are always kept.
+    """
+    empty = (np.empty((0, 2)), np.empty(0, dtype=np.int64), np.empty(0, dtype=bool))
     if roads.tree is None:
         return empty
     zone = area.buffer(config.ACCESS_SEARCH_M)
-    idx = roads.tree.query(zone, predicate="intersects")
-    xy_parts, road_parts = [], []
-    for i in idx:
-        part = roads.geoms[i].intersection(zone)
-        if part.is_empty:
-            continue
-        coords = shapely.get_coordinates(shapely.segmentize(part, config.ROAD_SAMPLE_STEP_M))
-        xy_parts.append(coords)
-        road_parts.append(np.full(len(coords), i, dtype=np.int64))
-    if len(idx) and len(parking_xy):
-        inside = shapely.contains_xy(zone, parking_xy[:, 0], parking_xy[:, 1])
-        for x, y in parking_xy[inside]:
-            p = shapely.Point(x, y)
-            nearest = min(idx, key=lambda j: roads.geoms[j].distance(p))
-            xy_parts.append(np.array([[x, y]]))
-            road_parts.append(np.array([nearest], dtype=np.int64))
-    if not xy_parts:
+    if region is not None:
+        zone = zone.intersection(region)
+    if zone.is_empty:
         return empty
-    xy, road_idx = np.vstack(xy_parts), np.concatenate(road_parts)
-    if len(xy) > config.MAX_VIEWING_CANDIDATES:
-        keep = np.linspace(0, len(xy) - 1, config.MAX_VIEWING_CANDIDATES).astype(np.int64)
-        xy, road_idx = xy[keep], road_idx[keep]
+    shapely.prepare(zone)
+    idx = roads.tree.query(zone, predicate="intersects")
+    idx = idx[~np.isin(roads.classes[idx], list(config.HIGHWAY_CLASSES))]  # never stop on a motorway
+    if len(idx) == 0:
+        return empty
+
+    parts = shapely.intersection(roads.geoms[idx], zone)
+    keep = ~shapely.is_empty(parts)
+    parts, idx = parts[keep], idx[keep]
+    coords, which = shapely.get_coordinates(shapely.segmentize(parts, config.ROAD_SAMPLE_STEP_M),
+                                            return_index=True)
+    road_xy, road_idx = coords, idx[which].astype(np.int64)
+
+    park_xy, park_idx = np.empty((0, 2)), np.empty(0, dtype=np.int64)
+    if len(parking_xy) and len(idx):
+        inside = shapely.contains_xy(zone, parking_xy[:, 0], parking_xy[:, 1])
+        park_xy = parking_xy[inside]
+        if len(park_xy):
+            d = shapely.distance(shapely.points(park_xy)[:, None], roads.geoms[idx][None, :])
+            park_idx = idx[np.argmin(d, axis=1)].astype(np.int64)
+
+    budget = max(config.MAX_VIEWING_CANDIDATES - len(park_xy), 0)
+    if len(road_xy) > budget:
+        sel = np.linspace(0, len(road_xy) - 1, budget).astype(np.int64)
+        road_xy, road_idx = road_xy[sel], road_idx[sel]
+    xy = np.vstack([road_xy, park_xy]) if len(park_xy) else road_xy
+    if len(xy) == 0:
+        return empty
+    is_parking = np.concatenate([np.zeros(len(road_xy), dtype=bool), np.ones(len(park_xy), dtype=bool)])
+    return xy, np.concatenate([road_idx, park_idx]), is_parking
+
+
+def sample_points(area: BaseGeometry, roads: RoadNetwork, parking_xy: np.ndarray,
+                  region: BaseGeometry | None = None) -> tuple[np.ndarray, np.ndarray]:
+    xy, road_idx, _ = _sample(area, roads, parking_xy, region)
     return xy, road_idx
 
 
 def find_viewing_point(area: BaseGeometry, roads: RoadNetwork, grid: DarknessGrid,
-                       projector: Projector, parking_xy: np.ndarray) -> ViewingPoint | None:
-    xy, road_idx = sample_points(area, roads, parking_xy)
+                       projector: Projector, parking_xy: np.ndarray,
+                       region: BaseGeometry | None = None) -> ViewingPoint | None:
+    """Darkest reachable point (ties within DARKNESS_TIE_MAG: nearest the area centroid).
+    `region` (projected metres) keeps the point inside the metro."""
+    xy, road_idx, _ = _sample(area, roads, parking_xy, region)
     if len(xy) == 0:
         return None
     sqm = grid.sample(xy[:, 0], xy[:, 1])

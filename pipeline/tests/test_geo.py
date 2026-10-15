@@ -36,3 +36,17 @@ def test_bbox_xy_contains_all_corners_and_round_trips():
             assert minx <= x <= maxx and miny <= y <= maxy
     w, s, e, n = p.bbox_lonlat((minx, miny, maxx, maxy))
     assert w <= bbox[0] and s <= bbox[1] and e >= bbox[2] and n >= bbox[3]
+
+
+def test_region_xy_is_projected_bbox_polygon():
+    p = Projector(32617)
+    bbox = (-84.40, 41.75, -84.00, 42.05)
+    region = p.region_xy(bbox)
+    assert region.geom_type == "Polygon" and region.is_valid
+    inside = shapely.Point(*p.to_xy(-84.2, 41.9))
+    assert region.contains(inside)
+    for lon, lat in [(-83.999, 41.9), (-84.401, 41.9), (-84.2, 42.051), (-84.2, 41.749)]:
+        assert not region.contains(shapely.Point(*p.to_xy(lon, lat))), (lon, lat)
+    # corners just inside the lon/lat box are still inside the projected region
+    for lon, lat in [(-84.3999, 41.7501), (-84.0001, 42.0499)]:
+        assert region.contains(shapely.Point(*p.to_xy(lon, lat))), (lon, lat)

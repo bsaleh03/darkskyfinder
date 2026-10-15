@@ -1,8 +1,11 @@
 import numpy as np
+import pandas as pd
 import pytest
 import shapely
 
 from darksky_pipeline import config
+from darksky_pipeline.darkness import DarknessGrid
+from overture_fixture import REGION_BBOX, TEST_EPSG
 from darksky_pipeline.roads import (RoadNetwork, build_road_network, find_viewing_point, is_paved,
                                     is_private, parking_points, sample_points)
 
@@ -73,3 +76,72 @@ def test_empty_network_returns_none(candidates, darkness_grid, projector):
                       paved=np.array([], dtype=bool), tree=None,
                       highway_geoms=np.array([], dtype=object), highway_tree=None)
     assert find_viewing_point(candidates["pl_hudson"].area, net, darkness_grid, projector, np.empty((0, 2))) is None
+
+
+def _segments(rows):
+    """rows: (class, wkt in lon/lat)."""
+    return pd.DataFrame([{"id": f"s{i}", "subtype": "road", "class": c, "road_surface": None,
+                          "access_restrictions": None, "wkb": shapely.to_wkb(shapely.from_wkt(w))}
+                         for i, (c, w) in enumerate(rows)])
+
+
+def _box_xy(projector, w, s, e, n):
+    return projector.geoms_to_xy(np.array([shapely.box(w, s, e, n)], dtype=object))[0]
+
+
+def test_motorway_through_park_is_not_a_viewing_point(projector, darkness_grid):
+    # C1: a motorway crosses the park centre; a tertiary road runs along the park's north side.
+    net = build_road_network(_segments([
+        ("motorway", "LINESTRING(-84.32 41.85, -84.32 41.95)"),
+        ("tertiary", "LINESTRING(-84.335 41.908, -84.305 41.908)"),
+    ]), projector)
+    assert len(net.highway_geoms) == 1  # still used for glare
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    vp = find_viewing_point(area, net, darkness_grid, projector, np.empty((0, 2)))
+    assert vp is not None and vp.road_class == "tertiary"
+    assert abs(vp.lat - 41.908) < 0.0005
+
+
+def test_only_motorway_means_no_viewing_point(projector, darkness_grid):
+    net = build_road_network(_segments([("trunk", "LINESTRING(-84.32 41.85, -84.32 41.95)")]), projector)
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    assert find_viewing_point(area, net, darkness_grid, projector, np.empty((0, 2))) is None
+
+
+def test_viewing_point_is_clipped_to_region(projector):
+    # I3: park straddles the region's east edge (-84.00); the sky gets darker eastward.
+    w, s, e, n = projector.bbox_xy((-84.5, 41.7, -83.7, 42.1))
+    res = 500.0
+    cols, rows = int((e - w) // res) + 1, int((n - s) // res) + 1
+    sqm = np.tile(18.0 + 0.05 * np.arange(cols, dtype=np.float32), (rows, 1))
+    grid = DarknessGrid(sqm=sqm, x0=w, y0=n, res=res, epsg=TEST_EPSG)
+    net = build_road_network(_segments([("tertiary", "LINESTRING(-84.02 41.90, -83.90 41.90)")]), projector)
+    area = _box_xy(projector, -84.02, 41.88, -83.90, 41.92)
+    unclipped = find_viewing_point(area, net, grid, projector, np.empty((0, 2)))
+    assert unclipped.lon > REGION_BBOX[2]  # sanity: without the region the point is outside
+    region = projector.region_xy(REGION_BBOX)
+    vp = find_viewing_point(area, net, grid, projector, np.empty((0, 2)), region=region)
+    assert vp is not None
+    assert REGION_BBOX[0] <= vp.lon <= REGION_BBOX[2] and REGION_BBOX[1] <= vp.lat <= REGION_BBOX[3]
+
+
+def test_parking_points_survive_cap_thinning():
+    # M1: thinning applies to road samples only.
+    line = shapely.LineString([(0, 500), (300_000, 500)])
+    net = RoadNetwork(geoms=np.array([line], dtype=object), classes=np.array(["primary"], dtype=object),
+                      paved=np.array([True]), tree=shapely.STRtree([line]),
+                      highway_geoms=np.array([], dtype=object), highway_tree=None)
+    parking = np.array([[100_033.0, 520.0], [150_017.0, 480.0], [200_011.0, 510.0]])
+    xy, road_idx = sample_points(shapely.box(0, 0, 300_000, 1_000), net, parking)
+    assert len(xy) <= config.MAX_VIEWING_CANDIDATES and len(xy) == len(road_idx)
+    for p in parking:
+        assert np.any(np.all(np.isclose(xy, p), axis=1)), p
+
+
+def test_samples_lie_on_their_roads(road_network, candidates):
+    area = candidates["pl_hudson"].area
+    xy, road_idx = sample_points(area, road_network, np.empty((0, 2)))
+    assert len(xy) > 0
+    d = shapely.distance(road_network.geoms[road_idx], shapely.points(xy))
+    assert np.all(d < 1e-6)
+    assert np.all(shapely.dwithin(area, shapely.points(xy), config.ACCESS_SEARCH_M + 1e-6))

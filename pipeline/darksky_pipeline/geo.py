@@ -38,6 +38,17 @@ class Projector:
         x, y = self.to_xy(lons, lats)
         return float(np.min(x)), float(np.min(y)), float(np.max(x)), float(np.max(y))
 
+    def region_xy(self, bbox, edge_points: int = 101, inset_m: float = 1.0) -> shapely.Polygon:
+        """The lon/lat bbox as a densified polygon in projected metres, inset slightly so points
+        inside it are strictly inside the lon/lat box after rounding."""
+        w, s, e, n = bbox
+        t = np.linspace(0.0, 1.0, edge_points)[:-1]
+        lons = np.concatenate([w + (e - w) * t, np.full(t.size, e), e - (e - w) * t, np.full(t.size, w)])
+        lats = np.concatenate([np.full(t.size, s), s + (n - s) * t, np.full(t.size, n), n - (n - s) * t])
+        x, y = self.to_xy(lons, lats)
+        poly = shapely.Polygon(np.column_stack([x, y]))
+        return poly.buffer(-inset_m) if inset_m else poly
+
     def bbox_lonlat(self, xy_bbox) -> tuple[float, float, float, float]:
         minx, miny, maxx, maxy = xy_bbox
         xs, ys = self._edges(minx, miny, maxx, maxy)
