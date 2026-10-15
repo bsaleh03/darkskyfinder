@@ -92,7 +92,7 @@ Synthesized from Sky Guide, Star Walk 2, DarkSky International, PhotoPills, Stel
    ├─ reads Overture GeoParquet from S3 (pinned release)
    ├─ reads VIIRS annual night-lights composite
    └─ writes:
-        spots_<metro>.json, darkness_<metro>.npy, search_<metro>.sqlite  → bundled into API deploy
+        spots_<metro>.json, darkness_<metro>.npz, search_<metro>.sqlite  → bundled into API deploy
         basemap_<metro>.pmtiles, lightpollution_<metro>.pmtiles          → Cloudflare R2
 
 [Render static site]  React + TypeScript + Vite + MapLibre
@@ -113,7 +113,7 @@ Synthesized from Sky Guide, Star Walk 2, DarkSky International, PhotoPills, Stel
 
 | Use | Overture theme |
 |---|---|
-| Candidate spots | Places (park, state/national park, campground, beach, scenic viewpoint, observatory, boat launch, parking) |
+| Candidate spots | Places (park, state/national park, campground, beach, scenic viewpoint, observatory, boat launch); parking places as viewing-point access aids |
 | Park extent, darkest reachable corner | Base: land use (parks, protected areas, recreation) |
 | Horizon openness | Base: land cover + water |
 | Local glare penalty | Buildings |
@@ -133,14 +133,14 @@ Per metro, with a configured region bounding box and a pinned Overture release:
 1. **Extract** Overture themes (places, land use, land cover, water, buildings, transportation, addresses, divisions) via DuckDB, clipped to the region.
 2. **Candidate spots:** Places in target categories ∪ land-use park/protected polygons; attach places to containing polygons; dedupe; merge with curated YAML.
 3. **Curated YAML** (`curated/<metro>.yaml`), keyed by GERS ID: `verified: true`, `dark_sky_place: true`, `access_note`, `unavailable: true` + reason.
-4. **Darkness:** clip VIIRS annual composite. Within each spot's polygon, sample points within ~300 m of a drivable road or parking; the darkest sample becomes the **viewing point**. Convert radiance → approx SQM/Bortle → label: *Milky Way vivid / visible / faint / not visible*.
+4. **Darkness:** clip VIIRS annual composite (with a 50 km pad so lights just outside the region still count), resample to a 500 m grid, and convolve with a distance-decay kernel (∝ d^-2.5, 50 km radius) to model **sky glow** — a dark pixel next to a city is not a dark sky. Convert sky glow → approx SQM/Bortle → label: *Milky Way vivid / visible / faint / not visible*. Within each spot's polygon, sample points within ~300 m of a drivable road or a parking place; among samples within 0.1 mag of the darkest, the one nearest the spot's center becomes the **viewing point**. Parking places are access aids, not spots on their own.
 5. **Glare:** building count within 1 km of viewing point + distance to nearest motorway/trunk → glare penalty.
 6. **Horizon:** land cover/water mix within 1 km (water, grass, crop = open; forest = closed) → *Open / Partial / Enclosed*.
 7. **Access:** nearest drivable non-private road, parking presence, badge (Verified / Likely / Check hours).
 8. **Amenities:** Places within ~5 km of viewing point (restrooms, fuel, food) → nearest of each with distance.
 9. **Outputs:**
    - `spots_<metro>.json` — all fixed spot features.
-   - `darkness_<metro>.npy` + metadata — downsampled radiance grid (~1 MB) for any-point "darker than home".
+   - `darkness_<metro>.npz` — 500 m sky-brightness (SQM) grid + georeference (~1 MB) for any-point "darker than home".
    - `search_<metro>.sqlite` — FTS5 index of addresses, places, division names.
    - `basemap_<metro>.pmtiles` — extracted from Overture's published tiles → R2.
    - `lightpollution_<metro>.pmtiles` — VIIRS overlay → R2.
@@ -177,7 +177,7 @@ Per metro, with a configured region bounding box and a pinned Overture release:
 - **Relevant** = best view − drive-time penalty + small access-badge bonus.
 - **Closest** = drive minutes ascending.
 - **Night verdict** = conditions across the top few spots.
-- **Darker than home** = spot radiance vs start-point radiance from the darkness grid, rounded ("~6× darker").
+- **Darker than home** = sky-brightness ratio from the SQM grid, `10^(0.4 × (sqm_spot − sqm_home))`, rounded ("~6× darker").
 
 ## 7. Error handling
 
