@@ -10,6 +10,8 @@ python -m venv .venv
 ```
 
 Also install the `pmtiles` CLI (https://github.com/protomaps/go-pmtiles/releases) and put it on PATH.
+A build without `--skip-tiles` checks for both `pmtiles` and `rio` (rio-pmtiles, from the `tiles` extra)
+before doing any work and stops with an error if either is missing.
 
 ## Inputs
 
@@ -29,17 +31,21 @@ python -m darksky_pipeline.build --metro bay_area --release <R> --viirs data/vii
 Outputs land in `out/<metro>/`: `spots_<metro>.json`, `darkness_<metro>.npz`, `search_<metro>.sqlite`,
 `lightpollution_<metro>.pmtiles`, `basemap_<metro>_<theme>.pmtiles`.
 Use `--skip-tiles` for fast iterations and `--no-strict` to see failing checks without aborting.
+Sanity checks run before the tile step, so a failing strict build stops before the slow tile extraction.
 
 ## Tools
 
 - `python -m darksky_pipeline.probe categories --metro se_mi --release <R>` — place categories present
 - `python -m darksky_pipeline.probe find --metro se_mi --release <R> --name "Lake Hudson"` — GERS IDs for curation
+  (land use is extracted for park subtypes only, so only park-like polygons are searched)
 - `python -m darksky_pipeline.probe sky --npz out/se_mi/darkness_se_mi.npz --point "Royal Oak,-83.1446,42.4895"`
 
 ## Curation
 
 `curated/<metro>.yaml` — keyed by GERS ID: `verified`, `dark_sky_place`, `access_note`,
-`unavailable` + `unavailable_reason`. Unknown IDs are reported after each build.
+`unavailable` + `unavailable_reason`. Unknown IDs are reported after each build; wrong field types are an error.
+An explicit `--curated <file>` that does not exist is an error; a missing default `curated/<metro>.yaml`
+only logs a warning.
 
 ## Tests
 

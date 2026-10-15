@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,6 +28,16 @@ from .tiles import (basemap_extract_commands, lightpollution_pmtiles_command, ru
 
 log = logging.getLogger("darksky_pipeline")
 
+TILE_TOOLS = ("pmtiles", "rio")
+
+
+def check_tile_tools() -> None:
+    """Fail fast (before hours of extraction) if the tile CLIs are not on PATH."""
+    missing = [t for t in TILE_TOOLS if shutil.which(t) is None]
+    if missing:
+        raise RuntimeError(f"tile tools not found on PATH: {', '.join(missing)} "
+                           "(install go-pmtiles and `pip install -e .[tiles]` for rio-pmtiles, or use --skip-tiles)")
+
 
 @dataclass
 class BuildSummary:
@@ -42,6 +53,8 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
               source_root: str = OVERTURE_S3_ROOT, cache_dir: Path | None = None,
               count_range: tuple[int, int] | None = None, skip_tiles: bool = False, strict: bool = True,
               tiles_release: str | None = None) -> BuildSummary:
+    if not skip_tiles:
+        check_tile_tools()
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     projector = Projector(metro.utm_epsg)
@@ -86,10 +99,6 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
 
     tif = out_dir / f"lightpollution_{metro.key}.tif"
     write_lightpollution_tif(grid, tif)
-    if not skip_tiles:
-        run_commands([lightpollution_pmtiles_command(tif, out_dir / f"lightpollution_{metro.key}.pmtiles"),
-                      *basemap_extract_commands(tiles_release or release.split(".")[0], metro.bbox,
-                                                out_dir, metro.key)])
 
     results = run_checks(doc, grid, metro, projector, count_range or config.SPOT_COUNT_RANGE[metro.key])
     for r in results:
@@ -100,7 +109,12 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     if summary.curated_unknown_ids:
         log.warning("curated ids not found in candidates: %s", summary.curated_unknown_ids)
     if strict:
-        assert_checks(results)
+        assert_checks(results)  # before the slow tile step
+
+    if not skip_tiles:
+        run_commands([lightpollution_pmtiles_command(tif, out_dir / f"lightpollution_{metro.key}.pmtiles"),
+                      *basemap_extract_commands(tiles_release or release.split(".")[0], metro.bbox,
+                                                out_dir, metro.key)])
     return summary
 
 
@@ -118,8 +132,16 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     metro = METROS[args.metro]
+    if args.curated is not None:
+        curated_path = Path(args.curated)
+        if not curated_path.exists():
+            ap.error(f"--curated file not found: {curated_path}")
+    else:
+        curated_path = Path(f"curated/{metro.key}.yaml")
+        if not curated_path.exists():
+            log.warning("default curated file %s not found; building without curated facts", curated_path)
     summary = run_build(metro, args.release, Path(args.viirs), Path(args.out) / metro.key,
-                        curated_path=Path(args.curated or f"curated/{metro.key}.yaml"),
+                        curated_path=curated_path,
                         cache_dir=Path(args.cache) / metro.key / args.release,
                         skip_tiles=args.skip_tiles, strict=not args.no_strict, tiles_release=args.tiles_release)
     print(f"{summary.metro}: {summary.spots} spots -> {summary.out_dir}")

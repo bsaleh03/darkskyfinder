@@ -80,3 +80,86 @@ def test_radiance_present_and_finite(built):
 def test_search_index_built(built):
     _, _, out = built
     assert query(out / "search_test.sqlite", "main st")[0]["kind"] == "address"
+
+
+# --- I9: tile tooling checked up front; checks run before tiles ------------------
+
+def _run(overture_root, viirs_path, out, **kw):
+    return run_build(METRO, RELEASE, viirs_path, out, source_root=overture_root.as_posix(),
+                     count_range=kw.pop("count_range", (1, 10)), **kw)
+
+
+def test_missing_tile_tools_fail_before_any_work(overture_root, viirs_path, tmp_path, monkeypatch):
+    from darksky_pipeline import build
+    monkeypatch.setattr(build.shutil, "which", lambda name: None if name == "rio" else f"/bin/{name}")
+    with pytest.raises(RuntimeError, match="rio"):
+        _run(overture_root, viirs_path, tmp_path / "out", skip_tiles=False)
+    assert not (tmp_path / "out" / "darkness_test.npz").exists()
+    assert not (tmp_path / "out" / "spots_test.json").exists()
+
+
+def test_checks_run_before_tiles(overture_root, viirs_path, tmp_path, monkeypatch):
+    from darksky_pipeline import build
+    order = []
+    real_checks = build.run_checks
+    monkeypatch.setattr(build.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(build, "run_checks", lambda *a, **k: order.append("checks") or real_checks(*a, **k))
+    monkeypatch.setattr(build, "run_commands", lambda cmds: order.append("tiles"))
+    _run(overture_root, viirs_path, tmp_path / "out", skip_tiles=False)
+    assert order == ["checks", "tiles"]
+
+
+def test_failed_strict_checks_skip_tiles(overture_root, viirs_path, tmp_path, monkeypatch):
+    from darksky_pipeline import build
+    from darksky_pipeline.checks import PipelineCheckError
+    ran = []
+    monkeypatch.setattr(build.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(build, "run_commands", lambda cmds: ran.append(cmds))
+    with pytest.raises(PipelineCheckError, match="spot_count"):
+        _run(overture_root, viirs_path, tmp_path / "out", skip_tiles=False, count_range=(100, 200))
+    assert ran == []
+
+
+# --- M5: curated path handling in main -------------------------------------------
+
+@pytest.fixture
+def fake_run_build(monkeypatch):
+    from darksky_pipeline import build
+    calls = []
+
+    def fake(metro, release, viirs, out, **kw):
+        calls.append(kw)
+        return build.BuildSummary(metro=metro.key, spots=0, out_dir=out)
+
+    monkeypatch.setattr(build, "run_build", fake)
+    return calls
+
+
+ARGS = ["--metro", "se_mi", "--release", "R", "--viirs", "v.tif", "--skip-tiles"]
+
+
+def test_main_explicit_missing_curated_is_an_error(tmp_path, monkeypatch, fake_run_build):
+    from darksky_pipeline.build import main
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        main(ARGS + ["--curated", "nope.yaml"])
+    assert fake_run_build == []
+
+
+def test_main_default_missing_curated_warns(tmp_path, monkeypatch, fake_run_build, caplog):
+    from darksky_pipeline.build import main
+    monkeypatch.chdir(tmp_path)
+    with caplog.at_level("WARNING"):
+        main(ARGS)
+    assert len(fake_run_build) == 1
+    assert any("curated" in r.getMessage() and r.levelname == "WARNING" for r in caplog.records)
+
+
+def test_main_explicit_existing_curated_is_used(tmp_path, monkeypatch, fake_run_build):
+    from pathlib import Path
+
+    from darksky_pipeline.build import main
+    monkeypatch.chdir(tmp_path)
+    Path("mine.yaml").write_text("spots: []\n", encoding="utf-8")
+    main(ARGS + ["--curated", "mine.yaml"])
+    assert fake_run_build[0]["curated_path"] == Path("mine.yaml")
