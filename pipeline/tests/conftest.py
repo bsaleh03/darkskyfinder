@@ -21,3 +21,26 @@ def overture_frames(overture_root):
               for k in THEMES}
     con.close()
     return frames
+
+
+@pytest.fixture(scope="session")
+def viirs_path(tmp_path_factory):
+    from viirs_fixture import write_viirs_fixture
+
+    return write_viirs_fixture(tmp_path_factory.mktemp("viirs") / "viirs.tif")
+
+
+@pytest.fixture(scope="session")
+def projector():
+    from darksky_pipeline.geo import Projector
+    from overture_fixture import TEST_EPSG
+
+    return Projector(TEST_EPSG)
+
+
+@pytest.fixture(scope="session")
+def darkness_grid(viirs_path):
+    from darksky_pipeline.darkness import build_darkness_grid
+    from overture_fixture import TEST_EPSG
+
+    return build_darkness_grid(viirs_path, REGION_BBOX, TEST_EPSG)
