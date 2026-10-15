@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 import shapely
 from shapely.geometry.base import BaseGeometry
@@ -31,8 +32,17 @@ def _polygonal(geom: BaseGeometry) -> BaseGeometry | None:
     return shapely.union_all(parts) if parts else None
 
 
+_PARK_PLACE_CATEGORIES = frozenset({"park", "state_park", "national_park", "nature_reserve"})
+
+
+def normalize_name(name) -> str:
+    """Lowercase, alphanumerics only: 'Foo Park!' == 'foo park'."""
+    return "".join(ch for ch in name.lower() if ch.isalnum()) if isinstance(name, str) else ""
+
+
 def _park_polygons(land_use: pd.DataFrame, projector: Projector) -> tuple[list[BaseGeometry], list[tuple]]:
-    lu = land_use[land_use["subtype"].isin(config.PARK_SUBTYPES)].reset_index(drop=True)
+    lu = land_use[land_use["subtype"].isin(config.PARK_SUBTYPES)
+                  & ~land_use["class"].isin(config.LAND_USE_CLASS_DENYLIST)].reset_index(drop=True)
     if len(lu) == 0:
         return [], []
     polys, rows = [], []
@@ -46,24 +56,77 @@ def _park_polygons(land_use: pd.DataFrame, projector: Projector) -> tuple[list[B
     return polys, rows
 
 
+def _merge_same_name(polys: list[BaseGeometry], rows: list[tuple]) -> tuple[list[BaseGeometry], list[tuple]]:
+    """Merge same-named polygons that overlap heavily (nested, or duplicate park/protected records).
+
+    Two polygons with the same normalized name merge when one contains the other's representative
+    point or their IoU exceeds 0.8. A merged group keeps the row of its largest member (ties: id).
+    """
+    if len(polys) < 2:
+        return polys, rows
+    names = [normalize_name(r[1]) for r in rows]
+    parent = list(range(len(polys)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    arr = np.array(polys, dtype=object)
+    left, right = shapely.STRtree(arr).query(arr, predicate="intersects")
+    for a, b in zip(left.tolist(), right.tolist()):
+        if a >= b or not names[a] or names[a] != names[b]:
+            continue
+        pa, pb = polys[a], polys[b]
+        heavy = pa.contains(pb.representative_point()) or pb.contains(pa.representative_point())
+        if not heavy:
+            union = pa.union(pb).area
+            heavy = union > 0 and pa.intersection(pb).area / union > 0.8
+        if heavy:
+            parent[find(a)] = find(b)
+
+    groups: dict[int, list[int]] = {}
+    for i in range(len(polys)):
+        groups.setdefault(find(i), []).append(i)
+    out_polys, out_rows = [], []
+    for members in groups.values():
+        lead = min(members, key=lambda j: (-polys[j].area, str(rows[j][0])))
+        out_polys.append(polys[lead] if len(members) == 1 else shapely.union_all([polys[j] for j in members]))
+        out_rows.append(rows[lead])
+    return out_polys, out_rows
+
+
 def build_candidates(places: pd.DataFrame, land_use: pd.DataFrame, projector: Projector) -> list[Candidate]:
-    polys, poly_rows = _park_polygons(land_use, projector)
+    polys, poly_rows = _merge_same_name(*_park_polygons(land_use, projector))
     tree = shapely.STRtree(polys) if polys else None
+    poly_names = [normalize_name(r[1]) for r in poly_rows]
 
     sel = places[places["category"].isin(config.SPOT_CATEGORIES)
                  & (places["confidence"] >= config.MIN_PLACE_CONFIDENCE)
                  & places["name"].notna()]
-    sel = sel[sel["name"].str.strip() != ""]
-    sel = sel.sort_values(["confidence", "id"], ascending=[False, True])
+    sel = sel[sel["name"].str.strip() != ""].copy()
+    # Who gets to name a polygon: park-like categories first, then confidence, then id.
+    sel["_prio"] = (~sel["category"].isin(_PARK_PLACE_CATEGORIES)).astype(int)
+    sel = sel.sort_values(["_prio", "confidence", "id"], ascending=[True, False, True])
 
     claimed: dict[int, tuple] = {}
     lone: list[tuple] = []
     for row in sel[["id", "name", "category", "lon", "lat"]].itertuples(index=False):
         x, y = projector.to_xy(row.lon, row.lat)
         pt = shapely.Point(x, y)
-        hits = tree.query(pt, predicate="within") if tree is not None else []
-        if len(hits):
-            i = int(min(hits, key=lambda j: polys[j].area))
+        hits = ([int(j) for j in tree.query(pt, predicate="dwithin", distance=config.PLACE_POLYGON_TOLERANCE_M)]
+                if tree is not None else [])
+        name = normalize_name(row.name)
+        named = [j for j in hits if poly_names[j] and poly_names[j] == name]
+        if row.category in config.LIKELY_CATEGORIES:
+            # Campgrounds, observatories, launches are never absorbed by an enclosing park; they
+            # only take (or dedupe against) a polygon carrying their own name.
+            hits = named
+        elif named:
+            hits = named
+        if hits:
+            i = min(hits, key=lambda j: (-polys[j].area, str(poly_rows[j][0])))
             claimed.setdefault(i, (row, pt))  # rows are sorted best-first
         else:
             lone.append((row, pt))

@@ -34,7 +34,8 @@ def test_outputs_exist(built):
 def test_summary(built):
     summary, spots, _ = built
     assert summary.spots == 3
-    assert summary.dropped_no_access == ["lu_woods"]
+    # I2(e): the boat launch is now its own candidate; it has no drivable road within reach.
+    assert summary.dropped_no_access == ["lu_woods", "pl_hudson_launch"]
     assert summary.curated_unknown_ids == ["pl_ghost"]
     assert all(c.ok for c in summary.checks)
 
