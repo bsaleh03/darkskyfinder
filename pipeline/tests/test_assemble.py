@@ -60,7 +60,7 @@ def test_document_sorted_and_written(tmp_path):
     b = {**a, "id": "pl_a"}
     doc = build_spots_document("se_mi", "R1", [a, b], generated_at="2026-10-15T00:00:00Z")
     assert [s["id"] for s in doc["spots"]] == ["pl_a", "pl_x"]
-    assert doc["schema_version"] == 1 and doc["metro"] == "se_mi" and doc["release"] == "R1"
+    assert doc["schema_version"] == 2 and doc["metro"] == "se_mi" and doc["release"] == "R1"
     path = tmp_path / "spots.json"
     write_spots_json(doc, path)
     assert json.loads(path.read_text(encoding="utf-8")) == doc

@@ -163,3 +163,14 @@ def test_main_explicit_existing_curated_is_used(tmp_path, monkeypatch, fake_run_
     Path("mine.yaml").write_text("spots: []\n", encoding="utf-8")
     main(ARGS + ["--curated", "mine.yaml"])
     assert fake_run_build[0]["curated_path"] == Path("mine.yaml")
+
+
+# --- area / display_name / duplicate merge ---------------------------------------
+
+def test_area_and_display_name(built):
+    summary, spots, _ = built
+    assert spots["pl_city"]["area"] == "Testville"
+    assert spots["pl_hudson"]["area"] is None and spots["pl_camp"]["area"] is None
+    for s in spots.values():
+        assert s["display_name"] == s["name"]
+    assert summary.merged_duplicates == 0

@@ -12,11 +12,13 @@ from pathlib import Path
 
 from . import config
 from .amenities import AmenityFinder
+from .areas import AreaFinder
 from .assemble import assemble_spot, build_spots_document, write_spots_json
 from .checks import CheckResult, assert_checks, run_checks
 from .config import METROS, OVERTURE_S3_ROOT, Metro
 from .curated import load_curated
 from .darkness import build_darkness_grid
+from .dedupe import apply_display_names, merge_duplicates
 from .extract import THEMES, connect, extract_theme
 from .features import GlareModel, HorizonModel, building_points
 from .geo import Projector
@@ -43,6 +45,7 @@ def check_tile_tools() -> None:
 class BuildSummary:
     metro: str
     spots: int
+    merged_duplicates: int = 0
     dropped_no_access: list[str] = field(default_factory=list)
     curated_unknown_ids: list[str] = field(default_factory=list)
     checks: list[CheckResult] = field(default_factory=list)
@@ -90,6 +93,13 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
                                    amenity_finder.near(vp.x, vp.y), curated.get(c.id)))
     log.info("%d spots, %d dropped (no drivable access)", len(spots), len(dropped))
 
+    spots, merged = merge_duplicates(spots)
+    log.info("merged %d duplicate spots", merged)
+    area_finder = AreaFinder(frames["division_areas"])
+    for s in spots:
+        s["area"] = area_finder.area_for(s["lon"], s["lat"])
+    apply_display_names(spots)
+
     doc = build_spots_document(metro.key, release, spots)
     write_spots_json(doc, out_dir / f"spots_{metro.key}.json")
 
@@ -103,7 +113,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     results = run_checks(doc, grid, metro, projector, count_range or config.SPOT_COUNT_RANGE[metro.key])
     for r in results:
         log.info("check %-26s %s  %s", r.name, "OK  " if r.ok else "FAIL", r.detail)
-    summary = BuildSummary(metro=metro.key, spots=len(spots), dropped_no_access=sorted(dropped),
+    summary = BuildSummary(metro=metro.key, spots=len(spots), merged_duplicates=merged, dropped_no_access=sorted(dropped),
                            curated_unknown_ids=sorted(set(curated) - {c.id for c in candidates}),
                            checks=results, out_dir=out_dir)
     if summary.curated_unknown_ids:

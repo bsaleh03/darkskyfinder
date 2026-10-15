@@ -57,6 +57,7 @@ LAND_USE_CLASS_DENYLIST = frozenset({
 MIN_PARK_AREA_M2 = 20_000
 PLACE_ONLY_RADIUS_M = 500  # search area for a spot place with no park polygon
 PLACE_POLYGON_TOLERANCE_M = 100  # a place this close to a park polygon belongs to it
+DUPLICATE_MERGE_M = 2_000  # same-name spots with viewing points this close are one spot
 
 # --- Search -------------------------------------------------------------------
 DIVISION_SUBTYPES = frozenset({"locality", "localadmin", "county", "neighborhood", "macrohood", "microhood"})
