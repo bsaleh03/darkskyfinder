@@ -8,10 +8,10 @@ from typing import Iterable
 
 import pandas as pd
 
+from .config import DIVISION_SUBTYPES
 from .util import as_list, wkb_to_geoms
 
 MIN_SEARCH_PLACE_CONFIDENCE = 0.5
-DIVISION_SUBTYPES = frozenset({"locality", "localadmin", "county", "neighborhood", "macrohood", "microhood"})
 
 Row = tuple[str, str, float, float]  # name, kind, lat, lon
 

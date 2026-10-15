@@ -24,8 +24,35 @@ def test_land_use_returns_polygons(overture_frames):
 
 def test_buildings_are_centroids(overture_frames):
     b = overture_frames["buildings"]
-    assert list(b.columns) == ["id", "lon", "lat"]
+    assert list(b.columns) == ["lon", "lat"]  # I5: id dropped to save memory
     assert len(b) == 505
+
+
+def test_segments_filtered_to_roads_in_sql(overture_frames):
+    seg = overture_frames["segments"]
+    assert "rd_rail" not in set(seg["id"])
+    assert set(seg["subtype"]) == {"road"}
+
+
+def test_divisions_filtered_to_search_subtypes_in_sql(overture_frames):
+    from darksky_pipeline import config
+    d = overture_frames["division_areas"]
+    assert set(d["id"]) == {"div_testville"}
+    assert set(d["subtype"]) <= config.DIVISION_SUBTYPES
+
+
+def test_land_use_filtered_to_park_subtypes_in_sql(overture_frames):
+    from darksky_pipeline import config
+    lu = overture_frames["land_use"]
+    assert "lu_resi" not in set(lu["id"])
+    assert set(lu["subtype"]) <= config.PARK_SUBTYPES
+
+
+def test_query_appends_where_clause():
+    sql = build_query("g", THEMES["segments"], (-1.0, -2.0, 3.0, 4.0))
+    assert "AND (subtype = 'road')" in sql
+    sql = build_query("g", THEMES["land_use"], (-1.0, -2.0, 3.0, 4.0))
+    assert "subtype IN ('campground', 'park', 'protected', 'recreation')" in sql
 
 
 def test_segments_keep_nested_columns(overture_frames):

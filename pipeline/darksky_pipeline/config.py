@@ -47,9 +47,16 @@ AMENITY_CATEGORIES: dict[str, frozenset[str]] = {
 AMENITY_RADIUS_M = 5_000
 
 # --- Land use -----------------------------------------------------------------
-PARK_SUBTYPES = frozenset({"park", "protected", "recreation"})
+PARK_SUBTYPES = frozenset({"park", "protected", "recreation", "campground"})
+# Land-use classes that are never stargazing spots even under a park subtype.
+LAND_USE_CLASS_DENYLIST = frozenset({
+    "pitch", "stadium", "track", "sports_centre", "golf_course", "swimming_pool", "playground", "dog_park",
+})
 MIN_PARK_AREA_M2 = 20_000
 PLACE_ONLY_RADIUS_M = 500  # search area for a spot place with no park polygon
+
+# --- Search -------------------------------------------------------------------
+DIVISION_SUBTYPES = frozenset({"locality", "localadmin", "county", "neighborhood", "macrohood", "microhood"})
 
 # --- Roads --------------------------------------------------------------------
 DRIVABLE_CLASSES = frozenset({

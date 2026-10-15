@@ -40,6 +40,9 @@ LAND_USE = [
      "POLYGON((-84.300 41.900, -84.299 41.900, -84.299 41.901, -84.300 41.901, -84.300 41.900))"),
     ("lu_out", "Far Away Forest", "protected", "forest",
      "POLYGON((-86.1 43.0, -86.0 43.0, -86.0 43.1, -86.1 43.1, -86.1 43.0))"),
+    # Not a park subtype: filtered out in the extract SQL (I5).
+    ("lu_resi", "Sunny Acres", "residential", "residential",
+     "POLYGON((-84.38 41.76, -84.36 41.76, -84.36 41.78, -84.38 41.78, -84.38 41.76))"),
 ]
 
 LAND_COVER = [
@@ -60,6 +63,8 @@ SEGMENTS = [
     ("rd_highway", "road", "motorway", "paved", None, "LINESTRING(-84.10 41.75, -84.10 42.05)"),
     ("rd_footway", "road", "footway", "paved", None, "LINESTRING(-84.34 41.955, -84.34 41.965)"),
     ("rd_private", "road", "service", None, "denied", "LINESTRING(-84.345 41.96, -84.335 41.96)"),
+    # Not a road: filtered out in the extract SQL (I5).
+    ("rd_rail", "rail", "standard_gauge", None, None, "LINESTRING(-84.39 41.76, -84.39 42.04)"),
 ]
 
 ADDRESSES = [
@@ -71,6 +76,9 @@ ADDRESSES = [
 DIVISION_AREAS = [
     ("div_testville", "Testville", "locality", "US", "US-MI",
      "POLYGON((-84.08 41.98, -84.02 41.98, -84.02 42.02, -84.08 42.02, -84.08 41.98))"),
+    # Not a searchable division subtype: filtered out in the extract SQL (I5).
+    ("div_region", "Testregion", "region", "US", "US-MI",
+     "POLYGON((-84.39 41.76, -84.01 41.76, -84.01 42.04, -84.39 42.04, -84.39 41.76))"),
 ]
 
 
