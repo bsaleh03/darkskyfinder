@@ -103,3 +103,9 @@ LAKE_CHIP_MIN_WATER = 0.2
 SPOT_COUNT_RANGE: dict[str, tuple[int, int]] = {"se_mi": (50, 5_000), "bay_area": (50, 5_000)}
 TOP_SPOTS_MIN_MEDIAN_SQM = 20.5
 VERIFIED_MIN_GAIN_MAG = 1.0
+
+# --- Tiles --------------------------------------------------------------------
+# Overture publishes per-theme PMTiles; confirm the URL for the pinned release in Task 14.
+OVERTURE_TILES_URL = "https://overturemaps-tiles-us-west-2-beta.s3.amazonaws.com/{release}/{theme}.pmtiles"
+OVERTURE_TILE_THEMES = ("base", "transportation", "buildings", "divisions")
+LIGHTPOLLUTION_BRIGHT_SQM = 17.0  # SQM rendered at full brightness in the overlay
