@@ -1,0 +1,6 @@
+# Curated facts for SE Michigan spots, keyed by Overture GERS ID.
+# Find IDs with: python -m darksky_pipeline.probe find --metro se_mi --release <R> --name "<name>"
+# Keys: id, label, verified, dark_sky_place, access_note, unavailable, unavailable_reason
+# Spots to add in Task 14: Lake Hudson Recreation Area, Port Crescent State Park,
+# Seven Lakes State Park, Proud Lake Recreation Area, Highland Recreation Area.
+spots: []
