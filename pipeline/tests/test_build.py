@@ -174,3 +174,39 @@ def test_area_and_display_name(built):
     for s in spots.values():
         assert s["display_name"] == s["name"]
     assert summary.merged_duplicates == 0
+
+
+# --- hidden: curated entries removed before viewing-point search ------------------
+
+@pytest.fixture(scope="module")
+def built_hidden(overture_root, viirs_path, tmp_path_factory):
+    out = tmp_path_factory.mktemp("out_hidden")
+    curated = out / "curated.yaml"
+    curated.write_text(
+        "spots:\n"
+        "  - id: pl_hudson\n    verified: true\n    dark_sky_place: true\n    access_note: Open 24h\n"
+        "  - id: pl_camp\n    hidden: true\n"
+        "  - id: pl_ghost\n    hidden: true\n",
+        encoding="utf-8")
+    summary = run_build(METRO, RELEASE, viirs_path, out, curated_path=curated,
+                        source_root=overture_root.as_posix(), count_range=(1, 10), skip_tiles=True,
+                        strict=False)  # hiding the darkest spot legitimately fails top_spots_dark
+    doc = json.loads((out / "spots_test.json").read_text(encoding="utf-8"))
+    return summary, {s["id"]: s for s in doc["spots"]}
+
+
+def test_hidden_spot_absent_from_spots(built, built_hidden):
+    _, base_spots, _ = built
+    summary, spots = built_hidden
+    assert "pl_camp" not in spots
+    assert summary.hidden == ["pl_camp"]
+    assert sorted(spots) == sorted(set(base_spots) - {"pl_camp"})
+    for sid, sp in spots.items():
+        assert sp == base_spots[sid], sid
+    assert summary.spots == len(spots)
+
+
+def test_hidden_unknown_ids_still_reported(built_hidden):
+    summary, _ = built_hidden
+    assert summary.curated_unknown_ids == ["pl_ghost"]
+    assert "pl_ghost" not in summary.hidden

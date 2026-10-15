@@ -1,6 +1,6 @@
 # Curated facts for SE Michigan spots, keyed by Overture GERS ID (release 2026-09-23.1).
 # Find IDs with: python -m darksky_pipeline.probe find --metro se_mi --release <R> --name "<name>"
-# Keys: id, label, verified, dark_sky_place, access_note, unavailable, unavailable_reason
+# Keys: id, label, verified, dark_sky_place, access_note, unavailable, unavailable_reason, hidden
 #
 # Dark sky designations: Michigan Public Act 57 of 1993 (Lake Hudson) and 2012 amendments
 # (Port Crescent, portion north/west of the Pinnebog River). No official source found yet

@@ -16,10 +16,11 @@ class CuratedEntry:
     access_note: str | None = None
     unavailable: bool = False
     unavailable_reason: str | None = None
+    hidden: bool = False
 
 
 _ALLOWED = {f.name for f in fields(CuratedEntry)}
-_BOOL_FIELDS = ("verified", "dark_sky_place", "unavailable")
+_BOOL_FIELDS = ("verified", "dark_sky_place", "unavailable", "hidden")
 _STR_FIELDS = ("label",)
 _OPTIONAL_STR_FIELDS = ("access_note", "unavailable_reason")
 

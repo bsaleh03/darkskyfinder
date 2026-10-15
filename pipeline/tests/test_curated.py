@@ -61,3 +61,14 @@ def test_rejects_wrong_field_types(tmp_path, text, msg):
 def test_optional_strings_accept_null(tmp_path):
     data = load_curated(write(tmp_path, "spots:\n  - id: a\n    access_note: null\n    unavailable_reason: null\n"))
     assert data["a"] == CuratedEntry(id="a")
+
+
+def test_hidden_loads_and_defaults_false(tmp_path):
+    data = load_curated(write(tmp_path, "spots:\n  - id: a\n    hidden: true\n  - id: b\n"))
+    assert data["a"].hidden is True
+    assert data["b"].hidden is False
+
+
+def test_hidden_must_be_bool(tmp_path):
+    with pytest.raises(ValueError, match="hidden"):
+        load_curated(write(tmp_path, 'spots:\n  - id: a\n    hidden: "yes"\n'))

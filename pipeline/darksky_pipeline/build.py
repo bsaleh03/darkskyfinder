@@ -46,6 +46,7 @@ class BuildSummary:
     metro: str
     spots: int
     merged_duplicates: int = 0
+    hidden: list[str] = field(default_factory=list)
     dropped_no_access: list[str] = field(default_factory=list)
     curated_unknown_ids: list[str] = field(default_factory=list)
     checks: list[CheckResult] = field(default_factory=list)
@@ -76,6 +77,12 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     curated = load_curated(curated_path) if curated_path else {}
     candidates = build_candidates(frames["places"], frames["land_use"], projector)
     log.info("%d candidate spots", len(candidates))
+    candidate_ids = {c.id for c in candidates}
+    hidden_ids = sorted(c.id for c in candidates if curated.get(c.id) and curated[c.id].hidden)
+    if hidden_ids:
+        hidden_set = set(hidden_ids)
+        candidates = [c for c in candidates if c.id not in hidden_set]
+        log.info("hiding %d curated spots: %s", len(hidden_ids), hidden_ids)
 
     roads = build_road_network(frames["segments"], projector)
     parking_xy = parking_points(frames["places"], projector)
@@ -114,7 +121,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     for r in results:
         log.info("check %-26s %s  %s", r.name, "OK  " if r.ok else "FAIL", r.detail)
     summary = BuildSummary(metro=metro.key, spots=len(spots), merged_duplicates=merged, dropped_no_access=sorted(dropped),
-                           curated_unknown_ids=sorted(set(curated) - {c.id for c in candidates}),
+                           hidden=hidden_ids, curated_unknown_ids=sorted(set(curated) - candidate_ids),
                            checks=results, out_dir=out_dir)
     if summary.curated_unknown_ids:
         log.warning("curated ids not found in candidates: %s", summary.curated_unknown_ids)
