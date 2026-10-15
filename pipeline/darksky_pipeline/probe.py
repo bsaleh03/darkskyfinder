@@ -15,7 +15,9 @@ import duckdb
 import pandas as pd
 
 from .config import METROS, OVERTURE_S3_ROOT
+from .darkness import DarknessGrid, sky_label
 from .extract import connect, extract_theme
+from .geo import Projector
 from .util import wkb_to_geoms
 
 DEFAULT_KEYWORDS = ("park", "camp", "beach", "observ", "nature", "view", "boat", "parking",
@@ -54,10 +56,23 @@ def list_releases(con: duckdb.DuckDBPyConnection, root: str = OVERTURE_S3_ROOT) 
     return sorted(releases)
 
 
+def sky_at(npz_path: Path, points: list[tuple[str, float, float]]) -> list[tuple[str, float, str]]:
+    grid = DarknessGrid.load(Path(npz_path))
+    projector = Projector(grid.epsg)
+    out = []
+    for name, lon, lat in points:
+        sqm = float(grid.sample(*projector.to_xy(lon, lat))[0])
+        out.append((name, round(sqm, 2), sky_label(sqm)))
+    return out
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="darksky_pipeline.probe")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("releases")
+    sp_sky = sub.add_parser("sky")
+    sp_sky.add_argument("--npz", required=True)
+    sp_sky.add_argument("--point", action="append", required=True, help='"Name,lon,lat" (repeatable)')
     for name in ("categories", "find"):
         sp = sub.add_parser(name)
         sp.add_argument("--metro", choices=sorted(METROS), required=True)
@@ -68,6 +83,11 @@ def main(argv: list[str] | None = None) -> None:
         else:
             sp.add_argument("--name", required=True)
     args = ap.parse_args(argv)
+    if args.cmd == "sky":
+        pts = [(p.split(",")[0], float(p.split(",")[1]), float(p.split(",")[2])) for p in args.point]
+        for name, sqm, label in sky_at(Path(args.npz), pts):
+            print(f"{name:30s} {sqm:6.2f}  {label}")
+        return
     con = connect()
     if args.cmd == "releases":
         print("\n".join(list_releases(con)))

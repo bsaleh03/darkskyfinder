@@ -20,3 +20,15 @@ def test_find_by_name_is_case_insensitive_and_covers_land_use(overture_frames):
 
 def test_list_releases_reads_directory_names(overture_root):
     assert list_releases(connect(), overture_root.as_posix()) == [RELEASE]
+
+
+def test_sky_at_reads_grid(darkness_grid, tmp_path):
+    from darksky_pipeline.probe import sky_at
+    from overture_fixture import CITY, HUDSON
+
+    path = tmp_path / "g.npz"
+    darkness_grid.save(path)
+    rows = dict((name, (sqm, label)) for name, sqm, label in
+                sky_at(path, [("city", *CITY), ("hudson", *HUDSON)]))
+    assert rows["hudson"][0] - rows["city"][0] > 2.0
+    assert rows["city"][1] == "Milky Way not visible"
