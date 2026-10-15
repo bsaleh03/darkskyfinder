@@ -126,8 +126,20 @@ def build_candidates(places: pd.DataFrame, land_use: pd.DataFrame, projector: Pr
         elif named:
             hits = named
         if hits:
-            i = min(hits, key=lambda j: (-polys[j].area, str(poly_rows[j][0])))
-            claimed.setdefault(i, (row, pt))  # rows are sorted best-first
+            if named:
+                # Name match first (containing before non-containing), then largest, then id.
+                i = min(hits, key=lambda j: (not polys[j].contains(pt), -polys[j].area, str(poly_rows[j][0])))
+            else:
+                containing = [j for j in hits if polys[j].contains(pt)]
+                if containing:
+                    i = min(containing, key=lambda j: (-polys[j].area, str(poly_rows[j][0])))
+                else:  # only within tolerance: nearest first
+                    i = min(hits, key=lambda j: (polys[j].distance(pt), -polys[j].area, str(poly_rows[j][0])))
+            if i not in claimed:
+                claimed[i] = (row, pt)  # rows are sorted best-first
+            elif normalize_name(claimed[i][0].name) != name:
+                lone.append((row, pt))  # distinct place on an already-named polygon: keep it
+            # same normalized name: duplicate of the claimant, drop
         else:
             lone.append((row, pt))
 
