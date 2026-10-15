@@ -64,27 +64,40 @@ class DarknessGrid:
     y0: float        # north edge, metres
     res: float
     epsg: int
+    radiance: np.ndarray | None = None  # float32 VIIRS radiance (nW/cm2/sr) before the sky-glow convolution
 
-    def sample(self, x, y) -> np.ndarray:
+    def _sample(self, arr: np.ndarray, x, y) -> np.ndarray:
         x = np.atleast_1d(np.asarray(x, dtype=np.float64))
         y = np.atleast_1d(np.asarray(y, dtype=np.float64))
         col = np.floor((x - self.x0) / self.res).astype(np.int64)
         row = np.floor((self.y0 - y) / self.res).astype(np.int64)
-        h, w = self.sqm.shape
+        h, w = arr.shape
         ok = (col >= 0) & (col < w) & (row >= 0) & (row < h)
         out = np.full(x.shape, np.nan, dtype=np.float64)
-        out[ok] = self.sqm[row[ok], col[ok]]
+        out[ok] = arr[row[ok], col[ok]]
         return out
 
+    def sample(self, x, y) -> np.ndarray:
+        return self._sample(self.sqm, x, y)
+
+    def sample_radiance(self, x, y) -> np.ndarray:
+        """Local (pre-convolution) radiance; NaN outside the grid or when not available."""
+        if self.radiance is None:
+            return np.full(np.atleast_1d(np.asarray(x)).shape, np.nan, dtype=np.float64)
+        return self._sample(self.radiance, x, y)
+
     def save(self, path: Path) -> None:
-        np.savez_compressed(path, sqm=self.sqm,
+        extra = {} if self.radiance is None else {"radiance": self.radiance}
+        np.savez_compressed(path, sqm=self.sqm, **extra,
                             meta=np.array([self.x0, self.y0, self.res, self.epsg], dtype=np.float64))
 
     @classmethod
     def load(cls, path: Path) -> "DarknessGrid":
         with np.load(path) as z:
             meta = z["meta"]
-            return cls(sqm=z["sqm"], x0=float(meta[0]), y0=float(meta[1]), res=float(meta[2]), epsg=int(meta[3]))
+            radiance = z["radiance"] if "radiance" in z.files else None
+            return cls(sqm=z["sqm"], x0=float(meta[0]), y0=float(meta[1]), res=float(meta[2]), epsg=int(meta[3]),
+                       radiance=radiance)
 
 
 def build_darkness_grid(viirs_path: Path, bbox: BBox, epsg: int,
@@ -115,4 +128,6 @@ def build_darkness_grid(viirs_path: Path, bbox: BBox, epsg: int,
 
     glow = fftconvolve(radiance, skyglow_kernel(res_m, radius_m, exponent), mode="same")
     glow = glow[n:n + rows, n:n + cols]
-    return DarknessGrid(sqm=sqm_from_glow(glow, k), x0=minx, y0=maxy, res=float(res_m), epsg=epsg)
+    local = radiance[n:n + rows, n:n + cols].astype(np.float32)
+    return DarknessGrid(sqm=sqm_from_glow(glow, k), x0=minx, y0=maxy, res=float(res_m), epsg=epsg,
+                        radiance=local)

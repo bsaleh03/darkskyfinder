@@ -44,11 +44,24 @@ def test_hudson_viewing_point_near_park_center(candidates, road_network, darknes
     assert abs(vp.lon + 84.25) < 0.002 and abs(vp.lat - 41.83) < 0.001
     assert vp.road_class == "tertiary" and vp.paved is True
     assert vp.sqm > 21.0
+    assert vp.radiance == pytest.approx(0.2, rel=0.05)  # I7
+    assert vp.parking is True  # M6: Hudson Lot lies inside the park's access zone
+
+
+def test_viewing_point_from_parking_sets_parking(projector, darkness_grid):
+    net = build_road_network(_segments([("tertiary", "LINESTRING(-84.335 41.908, -84.305 41.908)")]), projector)
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    lot = np.array([projector.to_xy(-84.32, 41.90)])  # the park centre: wins the darkness tie
+    vp = find_viewing_point(area, net, darkness_grid, projector, lot)
+    assert vp.parking is True and abs(vp.lat - 41.90) < 1e-6
+    far_lot = np.array([projector.to_xy(-84.20, 41.80)])
+    assert find_viewing_point(area, net, darkness_grid, projector, far_lot).parking is False
 
 
 def test_camp_viewing_point_is_unpaved_track(candidates, road_network, darkness_grid, projector):
     vp = find_viewing_point(candidates["pl_camp"].area, road_network, darkness_grid, projector, np.empty((0, 2)))
     assert vp is not None and vp.road_class == "track" and vp.paved is False
+    assert vp.parking is False
 
 
 def test_no_viewing_point_without_drivable_road(candidates, road_network, darkness_grid, projector):

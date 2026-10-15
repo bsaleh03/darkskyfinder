@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 
@@ -48,7 +49,9 @@ def test_spot_set(built):
 def test_hudson(built):
     _, spots, _ = built
     h = spots["pl_hudson"]
-    assert h["access"] == {"badge": "verified", "road_class": "tertiary", "paved": True, "note": "Open 24h"}
+    # M6: Hudson Lot is inside the park -> parking true
+    assert h["access"] == {"badge": "verified", "road_class": "tertiary", "paved": True, "parking": True,
+                           "note": "Open 24h"}
     assert h["dark_sky_place"] is True
     assert h["horizon"]["class"] == "open"
     assert h["why"] == ["Open lake horizon", "Low glare", "Paved access", "Dark Sky Place"]
@@ -60,10 +63,18 @@ def test_camp_and_city(built):
     _, spots, _ = built
     camp, city = spots["pl_camp"], spots["pl_city"]
     assert camp["access"]["badge"] == "likely" and camp["access"]["paved"] is False
+    assert camp["access"]["parking"] is False
     assert camp["horizon"]["class"] == "enclosed"
     assert city["access"]["badge"] == "check_hours"
     assert city["glare"]["penalty"] >= 0.5
     assert spots["pl_hudson"]["sqm"] - city["sqm"] > 2.0
+
+
+def test_radiance_present_and_finite(built):
+    _, spots, _ = built
+    for sp in spots.values():
+        assert isinstance(sp["radiance"], float) and math.isfinite(sp["radiance"]) and sp["radiance"] >= 0
+    assert spots["pl_city"]["radiance"] > spots["pl_hudson"]["radiance"]
 
 
 def test_search_index_built(built):

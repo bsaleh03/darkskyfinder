@@ -13,7 +13,7 @@ from darksky_pipeline.roads import ViewingPoint
 from darksky_pipeline.spots import Candidate
 
 CAND = Candidate("pl_x", "Lake X", "park", -84.25, 41.83, shapely.Point(0, 0).buffer(10), "place+polygon")
-VP = ViewingPoint(0.0, 0.0, -84.2501234567, 41.8301234567, 21.6234, "tertiary", True)
+VP = ViewingPoint(0.0, 0.0, -84.2501234567, 41.8301234567, 21.6234, "tertiary", True, radiance=0.2345, parking=True)
 GLARE = Glare(5, 12_000.0, 0.009)
 HORIZON = Horizon("open", 0.95, 0.0, 0.45)
 AMEN = {"restroom": None, "fuel": Amenity("Fuel", 3.4), "food": None}
@@ -38,9 +38,12 @@ def test_assemble_spot_schema_and_rounding():
     assert s["id"] == "pl_x" and s["name"] == "Lake X" and s["category"] == "park"
     assert s["lon"] == -84.250123 and s["lat"] == 41.830123
     assert s["sqm"] == 21.62 and s["bortle"] == 4 and s["sky_label"] == "Milky Way vivid"
+    assert s["radiance"] == 0.23  # I7
     assert s["glare"] == {"buildings_1km": 5, "highway_m": 12000.0, "penalty": 0.009}
     assert s["horizon"] == {"class": "open", "open_frac": 0.95, "closed_frac": 0.0, "water_frac": 0.45}
-    assert s["access"] == {"badge": "verified", "road_class": "tertiary", "paved": True, "note": "Open 24h"}
+    # M6 adds access.parking
+    assert s["access"] == {"badge": "verified", "road_class": "tertiary", "paved": True, "parking": True,
+                           "note": "Open 24h"}
     assert s["dark_sky_place"] is True and s["unavailable"] is False and s["unavailable_reason"] is None
     assert s["amenities"] == {"restroom": None, "fuel": {"name": "Fuel", "km": 3.4}, "food": None}
     assert "Dark Sky Place" in s["why"]

@@ -1,6 +1,7 @@
 """Drivable road network, access checks, and darkest-reachable viewing point."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -65,6 +66,8 @@ class ViewingPoint:
     sqm: float
     road_class: str
     paved: bool
+    radiance: float = math.nan  # local VIIRS radiance at the point (nW/cm2/sr)
+    parking: bool = False       # from a parking place, or parking within ACCESS_SEARCH_M (see find_viewing_point)
 
 
 def _sample(area: BaseGeometry, roads: RoadNetwork, parking_xy: np.ndarray,
@@ -126,8 +129,13 @@ def find_viewing_point(area: BaseGeometry, roads: RoadNetwork, grid: DarknessGri
                        projector: Projector, parking_xy: np.ndarray,
                        region: BaseGeometry | None = None) -> ViewingPoint | None:
     """Darkest reachable point (ties within DARKNESS_TIE_MAG: nearest the area centroid).
-    `region` (projected metres) keeps the point inside the metro."""
-    xy, road_idx, _ = _sample(area, roads, parking_xy, region)
+    `region` (projected metres) keeps the point inside the metro.
+
+    `parking` is true when the point is a parking place, a parking place lies within
+    ACCESS_SEARCH_M of the point, or a parking place lies in the spot's access zone (within
+    ACCESS_SEARCH_M of `area`), e.g. a lot inside the park.
+    """
+    xy, road_idx, is_parking = _sample(area, roads, parking_xy, region)
     if len(xy) == 0:
         return None
     sqm = grid.sample(xy[:, 0], xy[:, 1])
@@ -141,5 +149,9 @@ def find_viewing_point(area: BaseGeometry, roads: RoadNetwork, grid: DarknessGri
     k = int(np.argmin(dist))
     lon, lat = projector.to_lonlat(xy[k, 0], xy[k, 1])
     r = int(road_idx[k])
+    near = (len(parking_xy) > 0 and
+            bool(np.any(np.hypot(parking_xy[:, 0] - xy[k, 0], parking_xy[:, 1] - xy[k, 1]) <= config.ACCESS_SEARCH_M)))
+    radiance = float(grid.sample_radiance(xy[k, 0], xy[k, 1])[0])
     return ViewingPoint(float(xy[k, 0]), float(xy[k, 1]), float(lon), float(lat), float(sqm[k]),
-                        str(roads.classes[r]), bool(roads.paved[r]))
+                        str(roads.classes[r]), bool(roads.paved[r]),
+                        radiance=radiance, parking=bool(is_parking.any()) or near)

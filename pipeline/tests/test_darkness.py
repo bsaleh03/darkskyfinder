@@ -71,6 +71,21 @@ def test_save_load_round_trip(darkness_grid, tmp_path):
     assert loaded.epsg == darkness_grid.epsg and loaded.res == darkness_grid.res
     assert loaded.x0 == darkness_grid.x0 and loaded.y0 == darkness_grid.y0
     np.testing.assert_array_equal(loaded.sqm, darkness_grid.sqm)
+    np.testing.assert_array_equal(loaded.radiance, darkness_grid.radiance)
+
+
+def test_radiance_grid_matches_sqm_grid(darkness_grid):
+    r = darkness_grid.radiance
+    assert r.shape == darkness_grid.sqm.shape and r.dtype == np.float32
+    assert np.isfinite(r).all() and (r >= 0).all()
+
+
+def test_sample_radiance_city_vs_hudson(darkness_grid, projector):
+    city = darkness_grid.sample_radiance(*projector.to_xy(*CITY))[0]
+    hudson = darkness_grid.sample_radiance(*projector.to_xy(*HUDSON))[0]
+    assert city == pytest.approx(60.0, rel=0.05)
+    assert hudson == pytest.approx(0.2, rel=0.05)
+    assert np.isnan(darkness_grid.sample_radiance(*projector.to_xy(-90.0, 30.0))[0])
 
 
 def test_edge_glow_from_outside_region(tmp_path, projector):
