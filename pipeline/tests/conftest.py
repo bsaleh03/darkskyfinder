@@ -44,3 +44,17 @@ def darkness_grid(viirs_path):
     from overture_fixture import TEST_EPSG
 
     return build_darkness_grid(viirs_path, REGION_BBOX, TEST_EPSG)
+
+
+@pytest.fixture(scope="session")
+def road_network(overture_frames, projector):
+    from darksky_pipeline.roads import build_road_network
+
+    return build_road_network(overture_frames["segments"], projector)
+
+
+@pytest.fixture(scope="session")
+def candidates(overture_frames, projector):
+    from darksky_pipeline.spots import build_candidates
+
+    return {c.id: c for c in build_candidates(overture_frames["places"], overture_frames["land_use"], projector)}
