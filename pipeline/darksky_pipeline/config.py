@@ -120,7 +120,7 @@ TOP_SPOTS_MIN_MEDIAN_SQM = 20.5
 VERIFIED_MIN_GAIN_MAG = 1.0
 
 # --- Tiles --------------------------------------------------------------------
-# Overture publishes per-theme PMTiles; confirm the URL for the pinned release in Task 14.
-OVERTURE_TILES_URL = "https://overturemaps-tiles-us-west-2-beta.s3.amazonaws.com/{release}/{theme}.pmtiles"
+# Overture publishes per-theme PMTiles under the full release name (verified 2026-09-23.1).
+OVERTURE_TILES_URL = "https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/{release}/{theme}.pmtiles"
 OVERTURE_TILE_THEMES = ("base", "transportation", "buildings", "divisions")
 LIGHTPOLLUTION_BRIGHT_SQM = 17.0  # SQM rendered at full brightness in the overlay
