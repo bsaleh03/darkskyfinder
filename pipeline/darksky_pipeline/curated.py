@@ -19,6 +19,21 @@ class CuratedEntry:
 
 
 _ALLOWED = {f.name for f in fields(CuratedEntry)}
+_BOOL_FIELDS = ("verified", "dark_sky_place", "unavailable")
+_STR_FIELDS = ("label",)
+_OPTIONAL_STR_FIELDS = ("access_note", "unavailable_reason")
+
+
+def _check_types(path: Path, raw: dict) -> None:
+    for key in _BOOL_FIELDS:
+        if key in raw and not isinstance(raw[key], bool):
+            raise ValueError(f"{path}: entry {raw['id']} field {key} must be true/false, got {raw[key]!r}")
+    for key in _STR_FIELDS:
+        if key in raw and not isinstance(raw[key], str):
+            raise ValueError(f"{path}: entry {raw['id']} field {key} must be a string, got {raw[key]!r}")
+    for key in _OPTIONAL_STR_FIELDS:
+        if key in raw and raw[key] is not None and not isinstance(raw[key], str):
+            raise ValueError(f"{path}: entry {raw['id']} field {key} must be a string or null, got {raw[key]!r}")
 
 
 def load_curated(path: Path) -> dict[str, CuratedEntry]:
@@ -33,6 +48,7 @@ def load_curated(path: Path) -> dict[str, CuratedEntry]:
         unknown = set(raw) - _ALLOWED
         if unknown:
             raise ValueError(f"{path}: entry {raw['id']} has unknown keys {sorted(unknown)}")
+        _check_types(path, raw)
         entry = CuratedEntry(**{**raw, "id": str(raw["id"])})
         if entry.id in out:
             raise ValueError(f"{path}: duplicate id {entry.id}")
