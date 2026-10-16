@@ -43,13 +43,17 @@ def dark_window(lat: float, lon: float, night: date, tz: str) -> DarkWindow:
 
 
 def hourly_slots(window: DarkWindow) -> list[datetime]:
-    first = window.start.replace(minute=0, second=0, microsecond=0)
-    if first < window.start:
-        first += timedelta(hours=1)
+    tz = window.start.tzinfo
+    start_utc = window.start.astimezone(timezone.utc)
+    end_utc = window.end.astimezone(timezone.utc)
+    # Floor to a whole local hour, then step in UTC so DST transitions neither
+    # skip the repeated fall-back hour nor emit the non-existent spring-forward hour.
+    t = window.start.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    if t < start_utc:
+        t += timedelta(hours=1)
     slots = []
-    t = first
-    while t < window.end:
-        slots.append(t)
+    while t < end_utc:
+        slots.append(t.astimezone(tz))
         t += timedelta(hours=1)
     return slots or [window.start.replace(minute=0, second=0, microsecond=0)]
 
