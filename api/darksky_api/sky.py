@@ -59,7 +59,7 @@ def hourly_slots(window: DarkWindow) -> list[datetime]:
 
 
 def moon_illumination(night: date) -> float:
-    p = moon.phase(night)
+    p = moon.phase(night + timedelta(days=1))  # 00:00 UTC next day ~ evening in the US
     return float((1 - math.cos(2 * math.pi * p / SYNODIC_MONTH)) / 2)
 
 

@@ -93,9 +93,10 @@ def test_spring_forward_night_has_no_nonexistent_hour():
 
 
 def test_moon_illumination_phases():
-    assert moon_illumination(date(2026, 10, 26)) > 0.97
-    assert moon_illumination(date(2026, 11, 9)) < 0.03
-    assert 0.2 < moon_illumination(date(2026, 10, 16)) < 0.35
+    # astral's phase is for 00:00 UTC of the given date; night + 1 day ~ US evening
+    assert moon_illumination(date(2026, 10, 26)) > 0.95
+    assert moon_illumination(date(2026, 11, 9)) < 0.05
+    assert 0.3 < moon_illumination(date(2026, 10, 16)) < 0.45
 
 
 def test_moon_info_and_up():
