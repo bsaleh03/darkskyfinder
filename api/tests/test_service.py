@@ -123,3 +123,38 @@ def test_start_sqm_nan_is_safe(tmp_path):
     r = find_spots(store, FakeRouting(None), FakeForecast(), q, today=fixed_today)
     assert r["start"]["sqm"] is None
     assert all(s["darker_than_home"] == "about the same" for s in r["spots"])
+
+
+def _dense_store(tmp_path):
+    from darksky_api.data import DataStore
+    from fixtures import make_spot
+
+    spots = [make_spot(f"b{i:02d}", f"City Park {i}", -84.05 + 0.0005 * (i % 10), 42.00 + 0.003 * (1 + i // 10), 18.2,
+                       horizon="partial") for i in range(60)]
+    spots.append(make_spot("dark1", "Dark Preserve", -84.39, 42.00, 21.8, horizon="open"))
+    d = build_data_dir(tmp_path, spots=spots)
+    return DataStore.load(d, {"test": TEST_METRO})
+
+
+def test_prefilter_keeps_dark_site_beyond_dense_nearby_spots(tmp_path):
+    st = _dense_store(tmp_path)
+    routing = FakeRouting(None)
+    r = run(st, routing=routing, sort="relevant", max_drive=90)
+    assert r["spots"][0]["id"] == "dark1"
+    assert "dark1" in routing.calls[0][1]
+    assert len(routing.calls[0][1]) <= 50
+
+    routing = FakeRouting(None)
+    r = run(st, routing=routing, sort="closest", max_drive=90)
+    assert r["spots"][0]["id"].startswith("b")
+    assert "dark1" not in routing.calls[0][1]
+
+
+def test_timestamps_have_no_seconds(store):
+    import re
+
+    r = run(store)
+    top = r["spots"][0]
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d", top["timeline"][0]["time"])
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d", r["verdict"]["dark"]["start"])
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d", top["best_window"]["end"])

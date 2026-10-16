@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from . import config
 from .data import DataStore, MetroData
 from .forecast import cell_of, hour_key
-from .routing import haversine_km
+from .routing import estimate_minutes, haversine_km
 from .scoring import (Slot, best_window, conditions_score, darker_than_home, forecast_unavailable_verdict, hour_quality, relevant_score,
                       site_score, verdict)
 from .sky import dark_window, hourly_slots, moon_info, moon_up
@@ -43,7 +43,7 @@ def _today(tz: str) -> date:
 
 
 def _iso(dt: datetime | None) -> str | None:
-    return None if dt is None else dt.isoformat()
+    return None if dt is None else dt.isoformat(timespec="minutes")
 
 
 def _resolve(store: DataStore, q: SpotsQuery, today: Callable[[str], date]) -> tuple[MetroData, date]:
@@ -74,8 +74,7 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
         km = haversine_km(q.lon, q.lat, s["lon"], s["lat"])
         if km <= reach_km:
             pool.append((km, s))
-    pool.sort(key=lambda t: (t[0], t[1]["id"]))
-    pool = [s for _, s in pool[:config.PREFILTER_MAX_SPOTS]]
+    pool = _prefilter(pool, q)
 
     minutes, estimated = routing.drive_minutes((q.lon, q.lat), [(s["id"], s["lon"], s["lat"]) for s in pool])
     reachable = [s for s in pool if s["id"] in minutes and minutes[s["id"]] <= q.max_drive]
@@ -159,6 +158,18 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
         "drive_status": "approx" if estimated else "ok",
         "spots": ranked + tail,
     }
+
+
+def _prefilter(pool: list[tuple[float, dict]], q: SpotsQuery) -> list[dict]:
+    """Pick spots to route. Closest sort: nearest N. Otherwise: highest potential
+    (site score minus drive penalty), so dark sites beyond dense suburbs are kept."""
+    pool = sorted(pool, key=lambda t: (t[0], t[1]["id"]))
+    avail = [t for t in pool if not t[1]["unavailable"]]
+    gone = [t for t in pool if t[1]["unavailable"]][:config.MAX_UNAVAILABLE_SHOWN]
+    if q.sort != "closest":
+        avail.sort(key=lambda t: (-(site_score(t[1]) - config.DRIVE_PENALTY * estimate_minutes(t[0]) / q.max_drive),
+                                  t[0], t[1]["id"]))
+    return [s for _, s in avail[:config.PREFILTER_MAX_SPOTS]] + [s for _, s in gone]
 
 
 def _mean(values: list[float | None]) -> float | None:
