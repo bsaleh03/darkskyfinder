@@ -10,3 +10,6 @@ pipeline/tools/
 pipeline/*.log
 
 api/.venv/
+
+.env
+*.env
