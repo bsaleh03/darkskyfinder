@@ -149,3 +149,21 @@ def test_large_responses_are_gzipped(client):
     assert r.status_code == 200 and r.headers.get("content-encoding") == "gzip"
     small = client.get("/api/health", headers={"Accept-Encoding": "gzip"})
     assert "content-encoding" not in small.headers
+
+
+def test_spot_schema_documents_pass_through_fields(client):
+    comps = client.get("/openapi.json").json()["components"]["schemas"]
+    spot = comps["Spot"]["properties"]
+    for f in ("category", "bortle", "sky_label", "radiance", "glare", "horizon", "access", "dark_sky_place",
+              "unavailable_reason", "amenities", "why"):
+        assert f in spot, f
+    assert set(comps["Horizon"]["properties"]) == {"class", "open_frac", "closed_frac", "water_frac"}
+    assert set(comps["Amenities"]["properties"]) == {"restroom", "fuel", "food"}
+    assert "past" in comps["TimelineHour"]["properties"]
+
+
+def test_spot_pass_through_values_serialized(client, store):
+    top = client.get("/api/spots", params={"lat": CITY[1], "lon": CITY[0]}).json()["spots"][0]
+    src = next(s for s in store.metros["test"].spots if s["id"] == top["id"])
+    for f in ("category", "bortle", "glare", "horizon", "access", "amenities", "why", "dark_sky_place"):
+        assert top[f] == src[f], f

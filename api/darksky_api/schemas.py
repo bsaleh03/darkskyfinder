@@ -1,7 +1,7 @@
 """Response models (documented in /docs; validate the service output shape)."""
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Region(BaseModel):
@@ -75,16 +75,60 @@ class TimelineHour(BaseModel):
     past: bool
 
 
+class Glare(BaseModel):
+    buildings_1km: int
+    highway_m: float | None
+    penalty: float
+
+
+class Horizon(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    class_: str = Field(alias="class")
+    open_frac: float
+    closed_frac: float
+    water_frac: float
+
+
+class Access(BaseModel):
+    badge: str
+    road_class: str | None
+    paved: bool | None
+    parking: bool | None
+    note: str | None
+
+
+class Amenity(BaseModel):
+    name: str
+    km: float
+
+
+class Amenities(BaseModel):
+    restroom: Amenity | None
+    fuel: Amenity | None
+    food: Amenity | None
+
+
 class Spot(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str
     name: str
     display_name: str
     area: str | None
+    category: str
     lon: float
     lat: float
     sqm: float
+    bortle: int
+    sky_label: str
+    radiance: float
+    glare: Glare
+    horizon: Horizon
+    access: Access
+    dark_sky_place: bool
     unavailable: bool
+    unavailable_reason: str | None
+    amenities: Amenities
+    why: list[str]
     drive_minutes: int
     drive_is_estimate: bool
     darker_than_home: str
