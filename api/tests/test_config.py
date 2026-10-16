@@ -42,3 +42,11 @@ def test_load_settings_values():
 
 def test_blank_key_is_none():
     assert load_settings({"ORS_API_KEY": "  "}).ors_api_key is None
+
+
+def test_trusted_proxy_hops():
+    assert load_settings({}).trusted_proxy_hops == 1
+    assert load_settings({"TRUSTED_PROXY_HOPS": " 2 "}).trusted_proxy_hops == 2
+    assert load_settings({"TRUSTED_PROXY_HOPS": "0"}).trusted_proxy_hops == 1
+    assert load_settings({"TRUSTED_PROXY_HOPS": "lots"}).trusted_proxy_hops == 1
+    assert config.SEARCH_RATE_LIMIT_PER_MIN == 60

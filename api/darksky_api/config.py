@@ -74,7 +74,8 @@ NO_MOON_ILLUMINATION = 0.1
 
 # Protection
 RATE_LIMIT_PER_MIN = 20
-TRUSTED_PROXY_HOPS = 1
+SEARCH_RATE_LIMIT_PER_MIN = 60
+TRUSTED_PROXY_HOPS = 1  # default; override with env TRUSTED_PROXY_HOPS
 MAX_TRACKED_CLIENTS = 10_000
 DEV_ORIGIN = "http://localhost:5173"
 
@@ -84,6 +85,7 @@ class Settings:
     ors_api_key: str | None
     allowed_origins: tuple[str, ...]
     data_dir: Path
+    trusted_proxy_hops: int = TRUSTED_PROXY_HOPS
 
 
 def load_settings(env: Mapping[str, str]) -> Settings:
@@ -91,4 +93,9 @@ def load_settings(env: Mapping[str, str]) -> Settings:
     origins = [o.strip() for o in (env.get("ALLOWED_ORIGINS") or "").split(",") if o.strip()]
     if DEV_ORIGIN not in origins:
         origins.append(DEV_ORIGIN)
-    return Settings(ors_api_key=key, allowed_origins=tuple(origins), data_dir=Path(env.get("DATA_DIR") or "data"))
+    try:
+        hops = max(1, int((env.get("TRUSTED_PROXY_HOPS") or "").strip() or TRUSTED_PROXY_HOPS))
+    except ValueError:
+        hops = TRUSTED_PROXY_HOPS
+    return Settings(ors_api_key=key, allowed_origins=tuple(origins), data_dir=Path(env.get("DATA_DIR") or "data"),
+                    trusted_proxy_hops=hops)
