@@ -158,3 +158,25 @@ def test_timestamps_have_no_seconds(store):
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d", top["timeline"][0]["time"])
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d", r["verdict"]["dark"]["start"])
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d", top["best_window"]["end"])
+
+
+def test_fall_back_hours_get_distinct_forecasts(store):
+    from datetime import datetime, timezone
+
+    from darksky_api.forecast import HourWeather
+
+    edt_one = int(datetime(2026, 11, 1, 5, tzinfo=timezone.utc).timestamp())  # 01:00 EDT
+    est_one = edt_one + 3600  # 01:00 EST
+
+    class DstForecast:
+        def get(self, cells, tz):
+            hours = {t: HourWeather(50.0, 0.0, 24000.0) for t in range(edt_one - 12 * 3600, edt_one + 12 * 3600, 3600)}
+            hours[edt_one] = HourWeather(0.0, 0.0, 24000.0)
+            hours[est_one] = HourWeather(100.0, 0.0, 24000.0)
+            return {c: hours for c in cells}
+
+    q = SpotsQuery(lat=CITY[1], lon=CITY[0], night=date(2026, 10, 31))
+    r = find_spots(store, FakeRouting(MINUTES), DstForecast(), q, today=lambda _tz: date(2026, 10, 31))
+    ones = [h for h in r["spots"][0]["timeline"] if h["time"][11:13] == "01"]
+    assert [h["time"][-6:] for h in ones] == ["-04:00", "-05:00"]
+    assert [h["cloud"] for h in ones] == [0.0, 100.0]

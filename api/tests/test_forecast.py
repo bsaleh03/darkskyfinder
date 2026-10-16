@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -6,7 +6,8 @@ import httpx
 from darksky_api.cache import TTLCache
 from darksky_api.forecast import ForecastClient, HourWeather, cell_of, hour_key
 
-TIMES = ["2026-10-16T21:00", "2026-10-16T22:00"]
+T21 = int(datetime(2026, 10, 17, 1, tzinfo=timezone.utc).timestamp())  # 21:00 EDT
+TIMES = [T21, T21 + 3600]
 
 
 def payload(cloud=10):
@@ -20,7 +21,15 @@ def client_with(handler, cache=None):
 
 def test_cell_and_hour_key():
     assert cell_of(41.8349, -84.2512) == (41.8, -84.3)
-    assert hour_key(datetime(2026, 10, 16, 21, 0, tzinfo=ZoneInfo("America/Detroit"))) == "2026-10-16T21:00"
+    assert hour_key(datetime(2026, 10, 16, 21, 0, tzinfo=ZoneInfo("America/Detroit"))) == T21
+    assert hour_key(datetime(2026, 10, 16, 21, 59, tzinfo=ZoneInfo("America/Detroit"))) == T21
+
+
+def test_fall_back_repeated_hour_has_distinct_keys():
+    tz = ZoneInfo("America/Detroit")
+    first = datetime(2026, 11, 1, 1, 0, tzinfo=tz)  # EDT
+    second = datetime(2026, 11, 1, 1, 0, fold=1, tzinfo=tz)  # EST
+    assert hour_key(second) - hour_key(first) == 3600
 
 
 def test_single_cell_parses():
@@ -30,11 +39,12 @@ def test_single_cell_parses():
         calls.append(req)
         assert req.url.params["hourly"] == "cloud_cover,cloud_cover_low,visibility"
         assert req.url.params["timezone"] == "America/Detroit"
+        assert req.url.params["timeformat"] == "unixtime"
         return httpx.Response(200, json=payload())
 
     out = client_with(handler).get([(41.8, -84.3)], "America/Detroit")
-    assert out[(41.8, -84.3)]["2026-10-16T21:00"] == HourWeather(10, 0, 24000)
-    assert out[(41.8, -84.3)]["2026-10-16T22:00"].visibility is None
+    assert out[(41.8, -84.3)][T21] == HourWeather(10, 0, 24000)
+    assert out[(41.8, -84.3)][T21 + 3600].visibility is None
     assert len(calls) == 1
 
 
@@ -44,7 +54,7 @@ def test_multi_cell_list_response():
         return httpx.Response(200, json=[payload(10), payload(90)])
 
     out = client_with(handler).get([(41.8, -84.3), (42.0, -84.1)], "America/Detroit")
-    assert out[(42.0, -84.1)]["2026-10-16T21:00"].cloud == 90
+    assert out[(42.0, -84.1)][T21].cloud == 90
 
 
 def test_cache_avoids_second_call():

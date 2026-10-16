@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from darksky_api.forecast import HourWeather
 from darksky_api.routing import estimate_minutes, haversine_km
@@ -25,9 +25,9 @@ class FakeForecast:
         if self.fail:
             return {}
         hours = {}
-        t = datetime(2026, 10, 10, 0, 0)
-        while t < datetime(2026, 10, 25, 0, 0):
-            hours[t.strftime("%Y-%m-%dT%H:00")] = HourWeather(self.cloud, self.low, self.vis)
+        t = datetime(2026, 10, 10, 0, 0, tzinfo=timezone.utc)
+        while t < datetime(2026, 11, 10, 0, 0, tzinfo=timezone.utc):
+            hours[int(t.timestamp())] = HourWeather(self.cloud, self.low, self.vis)
             t += timedelta(hours=1)
         return {c: hours for c in cells if c not in self.fail_cells}
 
