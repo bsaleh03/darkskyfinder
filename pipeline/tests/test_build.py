@@ -79,7 +79,8 @@ def test_radiance_present_and_finite(built):
 
 def test_search_index_built(built):
     _, _, out = built
-    assert query(out / "search_test.sqlite", "main st")[0]["kind"] == "address"
+    assert query(out / "search_test.sqlite", "main st") == []
+    assert query(out / "search_test.sqlite", "testville")[0]["kind"] == "locality"
 
 
 # --- I9: tile tooling checked up front; checks run before tiles ------------------

@@ -8,7 +8,7 @@ from typing import Iterable
 
 import pandas as pd
 
-from .config import DIVISION_SUBTYPES
+from .config import DIVISION_SUBTYPES, SEARCH_INCLUDE_ADDRESSES
 from .util import as_list, atomic_path, wkb_to_geoms
 
 MIN_SEARCH_PLACE_CONFIDENCE = 0.5
@@ -24,14 +24,16 @@ def format_address(number, street, address_levels) -> str | None:
     return f"{head}, {levels[-1]}" if levels else head
 
 
-def search_rows(places: pd.DataFrame, addresses: pd.DataFrame, divisions: pd.DataFrame) -> list[Row]:
+def search_rows(places: pd.DataFrame, addresses: pd.DataFrame, divisions: pd.DataFrame,
+                include_addresses: bool = SEARCH_INCLUDE_ADDRESSES) -> list[Row]:
     rows: list[Row] = []
     p = places[places["name"].notna() & (places["confidence"] >= MIN_SEARCH_PLACE_CONFIDENCE)]
     rows += [(str(n), "place", float(lat), float(lon)) for n, lat, lon in p[["name", "lat", "lon"]].itertuples(index=False)]
-    for number, street, levels, lat, lon in addresses[["number", "street", "address_levels", "lat", "lon"]].itertuples(index=False):
-        text = format_address(number, street, levels)
-        if text:
-            rows.append((text, "address", float(lat), float(lon)))
+    if include_addresses:
+        for number, street, levels, lat, lon in addresses[["number", "street", "address_levels", "lat", "lon"]].itertuples(index=False):
+            text = format_address(number, street, levels)
+            if text:
+                rows.append((text, "address", float(lat), float(lon)))
     d = divisions[divisions["name"].notna() & divisions["subtype"].isin(DIVISION_SUBTYPES)].reset_index(drop=True)
     if len(d):
         for (name, subtype), g in zip(d[["name", "subtype"]].itertuples(index=False), wkb_to_geoms(d["wkb"])):

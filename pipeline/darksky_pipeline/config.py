@@ -125,3 +125,8 @@ VERIFIED_MIN_GAIN_MAG = 1.0
 OVERTURE_TILES_URL = "https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/{release}/{theme}.pmtiles"
 OVERTURE_TILE_THEMES = ("base", "transportation", "buildings", "divisions")
 LIGHTPOLLUTION_BRIGHT_SQM = 17.0  # SQM rendered at full brightness in the overlay
+
+# --- Search -------------------------------------------------------------------
+# Street addresses are excluded so each metro's index stays small enough to ship
+# with the API (git + Render); users can still drop a pin for an exact start.
+SEARCH_INCLUDE_ADDRESSES = False

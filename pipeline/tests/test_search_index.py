@@ -6,7 +6,8 @@ from darksky_pipeline.search_index import build_search_index, format_address, qu
 @pytest.fixture(scope="module")
 def index_path(overture_frames, tmp_path_factory):
     path = tmp_path_factory.mktemp("search") / "search.sqlite"
-    rows = search_rows(overture_frames["places"], overture_frames["addresses"], overture_frames["division_areas"])
+    rows = search_rows(overture_frames["places"], overture_frames["addresses"], overture_frames["division_areas"],
+                       include_addresses=True)
     build_search_index(rows, path)
     return path
 
@@ -18,12 +19,18 @@ def test_format_address():
 
 
 def test_rows_include_all_kinds(overture_frames):
-    rows = search_rows(overture_frames["places"], overture_frames["addresses"], overture_frames["division_areas"])
+    rows = search_rows(overture_frames["places"], overture_frames["addresses"], overture_frames["division_areas"],
+                       include_addresses=True)
     kinds = {k for _, k, _, _ in rows}
     assert kinds == {"place", "address", "locality"}
     names = {n for n, _, _, _ in rows}
     assert "Sketchy Park" not in names  # confidence 0.3 < 0.5
     assert None not in names
+
+
+def test_default_rows_exclude_addresses(overture_frames):
+    rows = search_rows(overture_frames["places"], overture_frames["addresses"], overture_frames["division_areas"])
+    assert {k for _, k, _, _ in rows} == {"place", "locality"}
 
 
 def test_query_address_prefix(index_path):
