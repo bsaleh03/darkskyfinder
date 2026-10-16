@@ -102,6 +102,14 @@ def test_estimates_flagged(store):
     assert all(s["drive_is_estimate"] for s in r["spots"])
 
 
+def test_estimates_flagged_per_spot(store):
+    r = run(store, routing=FakeRouting(MINUTES, estimate={"sp_camp"}))
+    assert r["drive_status"] == "approx"
+    flags = {s["id"]: s["drive_is_estimate"] for s in r["spots"]}
+    assert flags["sp_camp"] is True
+    assert not any(v for k, v in flags.items() if k != "sp_camp")
+
+
 def test_cloudy_night_is_poor(store):
     assert run(store, forecast=FakeForecast(cloud=95.0))["verdict"]["rating"] == "poor"
 

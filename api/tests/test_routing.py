@@ -11,9 +11,17 @@ START = (-84.05, 42.00)
 DESTS = [("a", -84.25, 41.83), ("b", -84.15, 41.78)]
 
 
-def make(handler, key="k", budget=450, today=lambda: date(2026, 10, 16), cache=None):
+class Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+def make(handler, key="k", budget=450, today=lambda: date(2026, 10, 16), cache=None, clock=None):
     return RoutingClient(httpx.Client(transport=httpx.MockTransport(handler)), key, cache=cache,
-                         budget=budget, today=today)
+                         budget=budget, today=today, clock=clock or Clock())
 
 
 def ok(durations):
@@ -34,12 +42,22 @@ def test_haversine_and_estimate():
 
 def test_ors_durations_to_minutes():
     minutes, est = make(ok([1800.0, 2400.0])).drive_minutes(START, DESTS)
-    assert est is False and minutes == {"a": 30.0, "b": 40.0}
+    assert est == set() and minutes == {"a": 30.0, "b": 40.0}
 
 
-def test_null_duration_drops_spot():
-    minutes, est = make(ok([1800.0, None])).drive_minutes(START, DESTS)
-    assert est is False and minutes == {"a": 30.0}
+def test_null_duration_keeps_spot_with_estimate():
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        return ok([1800.0, None])(req)
+
+    c = make(handler)
+    minutes, est = c.drive_minutes(START, DESTS)
+    assert est == {"b"} and minutes["a"] == 30.0
+    assert minutes["b"] == pytest.approx(estimate_minutes(haversine_km(*START, -84.15, 41.78)))
+    assert c.drive_minutes(START, DESTS) == (minutes, {"b"})  # unroutable result is cached too
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize("handler", [
@@ -48,20 +66,20 @@ def test_null_duration_drops_spot():
 ])
 def test_http_errors_fall_back(handler):
     minutes, est = make(handler).drive_minutes(START, DESTS)
-    assert est is True and set(minutes) == {"a", "b"}
+    assert est == {"a", "b"} and set(minutes) == {"a", "b"}
     assert minutes["a"] == pytest.approx(estimate_minutes(haversine_km(*START, -84.25, 41.83)))
 
 
 def test_timeout_falls_back():
     def handler(req):
         raise httpx.ConnectTimeout("slow", request=req)
-    assert make(handler).drive_minutes(START, DESTS)[1] is True
+    assert make(handler).drive_minutes(START, DESTS)[1] == {"a", "b"}
 
 
 def test_missing_key_never_calls():
     def handler(req):
         raise AssertionError("must not call ORS without a key")
-    assert make(handler, key=None).drive_minutes(START, DESTS)[1] is True
+    assert make(handler, key=None).drive_minutes(START, DESTS)[1] == {"a", "b"}
 
 
 def test_cache_hit_avoids_call():
@@ -77,18 +95,50 @@ def test_cache_hit_avoids_call():
     assert len(calls) == 1
 
 
+def test_superset_pool_routes_only_new_ids():
+    seen = []
+
+    def handler(req):
+        body = json.loads(req.content)
+        seen.append([tuple(loc) for loc in body["locations"][1:]])
+        return httpx.Response(200, json={"durations": [[600.0 * (k + 1) for k in range(len(body["destinations"]))]]})
+
+    c = make(handler, cache=TTLCache(3600))
+    c.drive_minutes(START, DESTS)
+    minutes, est = c.drive_minutes(START, DESTS + [("c", -84.30, 41.95)])
+    assert seen[1] == [(-84.30, 41.95)]
+    assert minutes == {"a": 10.0, "b": 20.0, "c": 10.0} and est == set()
+
+
+def test_failure_backs_off_then_retries():
+    calls = []
+    clock = Clock()
+
+    def handler(req):
+        calls.append(1)
+        return httpx.Response(503)
+
+    c = make(handler, clock=clock)
+    assert c.drive_minutes(START, DESTS)[1] == {"a", "b"}
+    assert c.drive_minutes(START, DESTS)[1] == {"a", "b"}
+    assert len(calls) == 1 and c.calls_today == 1
+    clock.t += 61
+    c.drive_minutes(START, DESTS)
+    assert len(calls) == 2
+
+
 def test_budget_switches_to_estimates_and_resets_daily():
     day = {"d": date(2026, 10, 16)}
     c = make(lambda req: httpx.Response(200, json={"durations": [[60.0, 120.0]]}), budget=1,
              today=lambda: day["d"])
-    assert c.drive_minutes(START, DESTS)[1] is False
-    assert c.drive_minutes((-83.0, 42.3), DESTS)[1] is True
+    assert c.drive_minutes(START, DESTS)[1] == set()
+    assert c.drive_minutes((-83.0, 42.3), DESTS)[1] == {"a", "b"}
     day["d"] = date(2026, 10, 17)
-    assert c.drive_minutes((-83.1, 42.4), DESTS)[1] is False
+    assert c.drive_minutes((-83.1, 42.4), DESTS)[1] == set()
 
 
 def test_empty_dests():
-    assert make(ok([])).drive_minutes(START, []) == ({}, False)
+    assert make(ok([])).drive_minutes(START, []) == ({}, set())
 
 
 def _json_handler(body):
@@ -104,7 +154,7 @@ def _json_handler(body):
 ])
 def test_malformed_200_body_falls_back(body):
     minutes, est = make(_json_handler(body)).drive_minutes(START, DESTS)
-    assert est is True and set(minutes) == {"a", "b"}
+    assert est == {"a", "b"} and set(minutes) == {"a", "b"}
 
 
 @pytest.mark.parametrize("row", [[1800.0], [1800.0, 2400.0, 60.0]])
@@ -115,9 +165,11 @@ def test_wrong_length_row_falls_back_and_is_not_cached(row):
         calls.append(1)
         return httpx.Response(200, json={"durations": [row]})
 
-    c = make(handler)
-    assert c.drive_minutes(START, DESTS)[1] is True
-    assert c.drive_minutes(START, DESTS)[1] is True
+    clock = Clock()
+    c = make(handler, clock=clock)
+    assert c.drive_minutes(START, DESTS)[1] == {"a", "b"}
+    clock.t += 61  # past the failure back-off
+    assert c.drive_minutes(START, DESTS)[1] == {"a", "b"}
     assert len(calls) == 2
 
 
@@ -129,6 +181,6 @@ def test_failure_never_logs_api_key(caplog):
 
     with caplog.at_level("DEBUG"):
         minutes, est = make(handler, key=key).drive_minutes(START, DESTS)
-    assert est is True
+    assert est == {"a", "b"}
     assert all(key not in r.getMessage() for r in caplog.records)
     assert key not in caplog.text

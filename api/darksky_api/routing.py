@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
+import time
 from datetime import date, datetime, timezone
 from typing import Callable
 
@@ -29,20 +30,27 @@ def estimate_minutes(km: float) -> float:
 
 
 class RoutingClient:
+    """Per-(start, spot) cached ORS matrix lookups.
+
+    drive_minutes returns ({id: minutes}, estimated_ids). Ids are estimated
+    from straight-line distance when ORS is unavailable (no key, budget spent,
+    recent failure) or reports the spot unroutable (null duration).
+    """
+
     def __init__(self, http: httpx.Client, api_key: str | None, cache: TTLCache | None = None,
                  budget: int = config.ORS_DAILY_BUDGET,
-                 today: Callable[[], date] = lambda: datetime.now(timezone.utc).date()) -> None:
+                 today: Callable[[], date] = lambda: datetime.now(timezone.utc).date(),
+                 clock: Callable[[], float] = time.monotonic) -> None:
         self._http = http
         self._key = api_key
-        self._cache = cache or TTLCache(config.ROUTE_CACHE_TTL_S)
+        self._cache = cache or TTLCache(config.ROUTE_CACHE_TTL_S, maxsize=config.ROUTE_CACHE_MAX)
         self._budget = budget
         self._today = today
+        self._clock = clock
         self._day: date | None = None
+        self._down_until = float("-inf")
         self.calls_today = 0
         self._lock = threading.Lock()
-
-    def _estimate(self, start: tuple[float, float], dests: list[Dest]) -> dict[str, float]:
-        return {i: estimate_minutes(haversine_km(start[0], start[1], lon, lat)) for i, lon, lat in dests}
 
     def _spend(self) -> bool:
         with self._lock:
@@ -54,37 +62,59 @@ class RoutingClient:
             self.calls_today += 1
             return True
 
-    def drive_minutes(self, start: tuple[float, float], dests: list[Dest]) -> tuple[dict[str, float], bool]:
-        if not dests:
-            return {}, False
+    def _available(self) -> bool:
+        return self._key is not None and self._clock() >= self._down_until and self._spend()
+
+    def drive_minutes(self, start: tuple[float, float], dests: list[Dest]) -> tuple[dict[str, float], set[str]]:
         r = config.ROUTE_CACHE_ROUND
-        key = (round(start[0], r), round(start[1], r), tuple(sorted(i for i, _, _ in dests)))
-        cached = self._cache.get(key)
-        if cached is not None:
-            return dict(cached), False
-        if self._key is None or not self._spend():
-            return self._estimate(start, dests), True
+        sx, sy = round(start[0], r), round(start[1], r)
+        unique = list({d[0]: d for d in dests}.values())
+        known: dict[str, float | None] = {}
+        todo: list[Dest] = []
+        for d in unique:
+            hit = self._cache.get((sx, sy, d[0]))
+            if hit is None:
+                todo.append(d)
+            else:
+                known[d[0]] = hit[0]
+        if todo and self._available():
+            routed = self._route(start, todo)
+            if routed is not None:
+                for i, value in routed.items():
+                    self._cache.set((sx, sy, i), (value,))
+                known.update(routed)
+        minutes: dict[str, float] = {}
+        estimated: set[str] = set()
+        for i, lon, lat in unique:
+            value = known.get(i)
+            if value is None:
+                value = estimate_minutes(haversine_km(start[0], start[1], lon, lat))
+                estimated.add(i)
+            minutes[i] = value
+        return minutes, estimated
+
+    def _route(self, start: tuple[float, float], dests: list[Dest]) -> dict[str, float | None] | None:
         body = {"locations": [list(start)] + [[lon, lat] for _, lon, lat in dests],
                 "sources": [0], "destinations": list(range(1, len(dests) + 1)), "metrics": ["duration"]}
         try:
             resp = self._http.post(config.ORS_URL, json=body, headers={"Authorization": self._key},
                                    timeout=config.ORS_TIMEOUT_S)
             resp.raise_for_status()
-            minutes = _parse_row(resp.json(), dests)
+            return _parse_row(resp.json(), dests)
         except (httpx.HTTPError, httpx.InvalidURL, httpx.StreamError, ValueError, KeyError, IndexError,
                 TypeError) as exc:
-            log.warning("ors failed (%s); using estimates", type(exc).__name__)
-            return self._estimate(start, dests), True
-        self._cache.set(key, minutes)
-        return dict(minutes), False
+            log.warning("ors failed (%s); using estimates for %ds", type(exc).__name__,
+                        config.ROUTE_FAILURE_BACKOFF_S)
+            self._down_until = self._clock() + config.ROUTE_FAILURE_BACKOFF_S
+            return None
 
 
-def _parse_row(body: object, dests: list[Dest]) -> dict[str, float]:
-    """Validate an ORS matrix body; raises on any shape or type mismatch."""
+def _parse_row(body: object, dests: list[Dest]) -> dict[str, float | None]:
+    """Validate an ORS matrix body (None = unroutable); raises on any shape or type mismatch."""
     row = body["durations"][0]  # type: ignore[index]
     if not isinstance(row, list) or len(row) != len(dests):
         raise ValueError("unexpected matrix row shape")
     for sec in row:
         if sec is not None and (isinstance(sec, bool) or not isinstance(sec, (int, float))):
             raise TypeError("non-numeric duration")
-    return {i: float(sec) / 60.0 for (i, _, _), sec in zip(dests, row) if sec is not None}
+    return {i: None if sec is None else float(sec) / 60.0 for (i, _, _), sec in zip(dests, row)}

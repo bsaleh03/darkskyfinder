@@ -113,7 +113,7 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
         scored.append({
             **s,
             "drive_minutes": round(minutes[s["id"]]),
-            "drive_is_estimate": estimated,
+            "drive_is_estimate": s["id"] in estimated,
             "darker_than_home": darker_than_home(s["sqm"], home if home_sqm is not None else float("nan")),
             "scores": {"site": round(site), "conditions": round(cond), "best_view": round(bv), "relevant": round(rel)},
             "timeline": [{"time": _iso(sl.time), "quality": round(sl.quality, 3), "cloud": sl.cloud,
@@ -139,7 +139,7 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
         x.pop("_sort")
 
     unavailable = sorted((s for s in reachable if s["unavailable"]), key=lambda s: (minutes[s["id"]], s["id"]))
-    tail = [{**s, "drive_minutes": round(minutes[s["id"]]), "drive_is_estimate": estimated,
+    tail = [{**s, "drive_minutes": round(minutes[s["id"]]), "drive_is_estimate": s["id"] in estimated,
              "darker_than_home": darker_than_home(s["sqm"], home if home_sqm is not None else float("nan")),
              "scores": None, "timeline": [], "best_window": None}
             for s in unavailable[:config.MAX_UNAVAILABLE_SHOWN]]

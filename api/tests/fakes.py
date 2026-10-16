@@ -6,6 +6,7 @@ from darksky_api.routing import estimate_minutes, haversine_km
 
 class FakeRouting:
     def __init__(self, minutes=None, estimate=False):
+        """estimate: True (all ids estimated), False, or a collection of estimated ids."""
         self.minutes = minutes
         self.estimate = estimate
         self.calls = []
@@ -13,8 +14,12 @@ class FakeRouting:
     def drive_minutes(self, start, dests):
         self.calls.append((start, [d[0] for d in dests]))
         if self.minutes is None:
-            return {i: estimate_minutes(haversine_km(start[0], start[1], lon, lat)) for i, lon, lat in dests}, self.estimate
-        return {i: self.minutes[i] for i, _, _ in dests if i in self.minutes}, self.estimate
+            out = {i: estimate_minutes(haversine_km(start[0], start[1], lon, lat)) for i, lon, lat in dests}
+        else:
+            out = {i: self.minutes[i] for i, _, _ in dests if i in self.minutes}
+        if self.estimate is True:
+            return out, set(out)
+        return out, {i for i in out if i in (self.estimate or ())}
 
 
 class FakeForecast:
