@@ -89,3 +89,46 @@ def test_budget_switches_to_estimates_and_resets_daily():
 
 def test_empty_dests():
     assert make(ok([])).drive_minutes(START, []) == ({}, False)
+
+
+def _json_handler(body):
+    return lambda req: httpx.Response(200, json=body)
+
+
+@pytest.mark.parametrize("body", [
+    {"durations": [["1800.0", 2400.0]]},  # string value
+    {"durations": [None]},  # row is null
+    {"durations": [[True, 2400.0]]},  # bool is not a duration
+    {"other": [[1800.0, 2400.0]]},  # missing durations key
+    [1800.0, 2400.0],  # wrong top-level type
+])
+def test_malformed_200_body_falls_back(body):
+    minutes, est = make(_json_handler(body)).drive_minutes(START, DESTS)
+    assert est is True and set(minutes) == {"a", "b"}
+
+
+@pytest.mark.parametrize("row", [[1800.0], [1800.0, 2400.0, 60.0]])
+def test_wrong_length_row_falls_back_and_is_not_cached(row):
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        return httpx.Response(200, json={"durations": [row]})
+
+    c = make(handler)
+    assert c.drive_minutes(START, DESTS)[1] is True
+    assert c.drive_minutes(START, DESTS)[1] is True
+    assert len(calls) == 2
+
+
+def test_failure_never_logs_api_key(caplog):
+    key = "secret-key-123"
+
+    def handler(req):
+        raise httpx.InvalidURL("bad url")
+
+    with caplog.at_level("DEBUG"):
+        minutes, est = make(handler, key=key).drive_minutes(START, DESTS)
+    assert est is True
+    assert all(key not in r.getMessage() for r in caplog.records)
+    assert key not in caplog.text

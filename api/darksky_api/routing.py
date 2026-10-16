@@ -67,10 +67,21 @@ class RoutingClient:
             resp = self._http.post(config.ORS_URL, json=body, headers={"Authorization": self._key},
                                    timeout=config.ORS_TIMEOUT_S)
             resp.raise_for_status()
-            row = resp.json()["durations"][0]
-        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
+            minutes = _parse_row(resp.json(), dests)
+        except (httpx.HTTPError, httpx.InvalidURL, httpx.StreamError, ValueError, KeyError, IndexError,
+                TypeError) as exc:
             log.warning("ors failed (%s); using estimates", type(exc).__name__)
             return self._estimate(start, dests), True
-        minutes = {i: float(sec) / 60.0 for (i, _, _), sec in zip(dests, row) if sec is not None}
         self._cache.set(key, minutes)
         return dict(minutes), False
+
+
+def _parse_row(body: object, dests: list[Dest]) -> dict[str, float]:
+    """Validate an ORS matrix body; raises on any shape or type mismatch."""
+    row = body["durations"][0]  # type: ignore[index]
+    if not isinstance(row, list) or len(row) != len(dests):
+        raise ValueError("unexpected matrix row shape")
+    for sec in row:
+        if sec is not None and (isinstance(sec, bool) or not isinstance(sec, (int, float))):
+            raise TypeError("non-numeric duration")
+    return {i: float(sec) / 60.0 for (i, _, _), sec in zip(dests, row) if sec is not None}
