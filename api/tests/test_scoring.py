@@ -84,3 +84,11 @@ def test_verdicts():
     bright = verdict([20, 20, 20], None, 0.98, None, None, 5.0)
     assert bright["sentence"] == "Bright moon — bright stars and planets only."
     assert verdict([], None, 0.3, None, None, None) == {"rating": "unknown", "sentence": "No spots within reach."}
+
+
+def test_forecast_unavailable_verdict_moon_phrase():
+    from darksky_api.scoring import forecast_unavailable_verdict
+    assert forecast_unavailable_verdict(0.0, None, None)["sentence"] == (
+        "Forecast unavailable — ranked by darkness and drive time, no moon.")
+    assert forecast_unavailable_verdict(0.5, None, None)["sentence"] == (
+        "Forecast unavailable — ranked by darkness and drive time.")

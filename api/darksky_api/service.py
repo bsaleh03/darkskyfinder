@@ -11,7 +11,7 @@ from . import config
 from .data import DataStore, MetroData
 from .forecast import cell_of, hour_key
 from .routing import haversine_km
-from .scoring import (Slot, best_window, conditions_score, darker_than_home, hour_quality, relevant_score,
+from .scoring import (Slot, best_window, conditions_score, darker_than_home, forecast_unavailable_verdict, hour_quality, relevant_score,
                       site_score, verdict)
 from .sky import dark_window, hourly_slots, moon_info, moon_up
 
@@ -128,6 +128,8 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
     lead = by_view[0] if by_view else None
     v = verdict([x["_sort"]["conditions"] for x in by_view], lead["_sort"]["window"] if lead else None,
                 moon.illumination, moon.rise, moon.set, lead["_sort"]["mean_cloud"] if lead else None)
+    if scored and forecast_status == "unavailable":
+        v = forecast_unavailable_verdict(moon.illumination, moon.rise, moon.set)
 
     if q.sort == "closest":
         scored.sort(key=lambda x: (x["_sort"]["closest"], x["id"]))

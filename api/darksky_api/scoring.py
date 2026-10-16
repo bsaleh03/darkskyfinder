@@ -87,6 +87,12 @@ def _moon_phrase(illumination: float, rise: datetime | None, set_: datetime | No
     return ""
 
 
+def forecast_unavailable_verdict(illumination: float, moon_rise: datetime | None,
+                                 moon_set: datetime | None) -> dict:
+    moon = _moon_phrase(illumination, moon_rise, moon_set)
+    return {"rating": "unknown", "sentence": f"Forecast unavailable — ranked by darkness and drive time{moon}."}
+
+
 def verdict(conditions: list[float], window: tuple[datetime, datetime] | None, illumination: float,
             moon_rise: datetime | None, moon_set: datetime | None, mean_cloud: float | None) -> dict:
     if not conditions:

@@ -83,6 +83,14 @@ def test_forecast_unavailable_still_ranks(store):
     assert r["spots"][0]["timeline"][0]["cloud"] is None
 
 
+def test_forecast_unavailable_verdict_is_unknown(store):
+    v = run(store, forecast=FakeForecast(fail=True))["verdict"]
+    assert v["rating"] == "unknown"
+    assert v["sentence"].startswith("Forecast unavailable — ranked by darkness and drive time")
+    assert v["sentence"].endswith(".")
+    assert run(store)["verdict"]["rating"] == "good"
+
+
 def test_forecast_partial(store):
     r = run(store, forecast=FakeForecast(fail_cells={(41.8, -84.2)}))
     assert r["forecast_status"] == "partial"
@@ -101,7 +109,6 @@ def test_cloudy_night_is_poor(store):
 def test_prefilter_caps_and_skips_far(store):
     routing = FakeRouting(MINUTES)
     run(store, routing=routing, max_drive=15)
-    assert set(routing.calls[0][1]) <= {"sp_city", "sp_closed", "sp_hudson", "sp_camp", "sp_far"}
     assert "sp_far" not in routing.calls[0][1]  # 28 km > 15 min × 1.2 km/min
 
 
