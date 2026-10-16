@@ -105,3 +105,47 @@ def test_internal_error_hides_details(store):
     r = TestClient(app, raise_server_exceptions=False).get("/api/spots", params={"lat": CITY[1], "lon": CITY[0]})
     assert r.status_code == 500 and r.json() == {"error": "internal"}
     assert "secret" not in r.text
+
+
+def test_trusted_proxy_hops_from_settings(store):
+    import dataclasses
+
+    app = create_app(store, FakeRouting(MINUTES), FakeForecast(), dataclasses.replace(SETTINGS, trusted_proxy_hops=2),
+                     limiter=SlidingWindowLimiter(3), today=fixed_today)
+    c = TestClient(app)
+    params = {"lat": CITY[1], "lon": CITY[0]}
+    for _ in range(3):
+        c.get("/api/spots", params=params, headers={"X-Forwarded-For": "6.6.6.6, 1.1.1.1, 10.0.0.1"})
+    assert c.get("/api/spots", params=params,
+                 headers={"X-Forwarded-For": "7.7.7.7, 1.1.1.1, 10.0.0.2"}).status_code == 429
+    assert c.get("/api/spots", params=params,
+                 headers={"X-Forwarded-For": "1.1.1.1, 3.3.3.3, 10.0.0.1"}).status_code == 200
+
+
+def test_search_rate_limited(store):
+    app = create_app(store, FakeRouting(MINUTES), FakeForecast(), SETTINGS,
+                     search_limiter=SlidingWindowLimiter(2), today=fixed_today)
+    c = TestClient(app)
+    codes = [c.get("/api/search", params={"q": "lake"}).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+    assert c.get("/api/search", params={"q": "lake"}).json() == {"error": "rate_limited"}
+    assert c.get("/api/search", params={"q": "lake"}, headers={"X-Forwarded-For": "2.2.2.2"}).status_code == 200
+
+
+def test_internal_error_keeps_cors_headers(store):
+    class Boom:
+        def drive_minutes(self, *a):
+            raise RuntimeError("secret internals")
+
+    app = create_app(store, Boom(), FakeForecast(), SETTINGS, today=fixed_today)
+    r = TestClient(app, raise_server_exceptions=False).get(
+        "/api/spots", params={"lat": CITY[1], "lon": CITY[0]}, headers={"Origin": "https://app.example"})
+    assert r.status_code == 500 and r.json() == {"error": "internal"}
+    assert r.headers["access-control-allow-origin"] == "https://app.example"
+
+
+def test_large_responses_are_gzipped(client):
+    r = client.get("/api/spots", params={"lat": CITY[1], "lon": CITY[0]}, headers={"Accept-Encoding": "gzip"})
+    assert r.status_code == 200 and r.headers.get("content-encoding") == "gzip"
+    small = client.get("/api/health", headers={"Accept-Encoding": "gzip"})
+    assert "content-encoding" not in small.headers
