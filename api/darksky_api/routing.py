@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from datetime import date, datetime, timezone
 from typing import Callable
 
@@ -38,18 +39,20 @@ class RoutingClient:
         self._today = today
         self._day: date | None = None
         self.calls_today = 0
+        self._lock = threading.Lock()
 
     def _estimate(self, start: tuple[float, float], dests: list[Dest]) -> dict[str, float]:
         return {i: estimate_minutes(haversine_km(start[0], start[1], lon, lat)) for i, lon, lat in dests}
 
     def _spend(self) -> bool:
-        today = self._today()
-        if today != self._day:
-            self._day, self.calls_today = today, 0
-        if self.calls_today >= self._budget:
-            return False
-        self.calls_today += 1
-        return True
+        with self._lock:
+            today = self._today()
+            if today != self._day:
+                self._day, self.calls_today = today, 0
+            if self.calls_today >= self._budget:
+                return False
+            self.calls_today += 1
+            return True
 
     def drive_minutes(self, start: tuple[float, float], dests: list[Dest]) -> tuple[dict[str, float], bool]:
         if not dests:

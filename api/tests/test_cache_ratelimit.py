@@ -36,3 +36,28 @@ def test_limiter_allows_then_blocks_then_recovers():
     assert lim.allow("other")
     clock.t = 61
     assert lim.allow("ip")
+
+
+def test_limiter_bounds_tracked_keys_and_drops_empty():
+    lim = SlidingWindowLimiter(2, max_keys=5, clock=Clock())
+    for i in range(100):
+        lim.allow(f"ip{i}")
+        assert len(lim._hits) <= 5
+    zero = SlidingWindowLimiter(0, clock=Clock())
+    assert not zero.allow("x") and len(zero._hits) == 0
+
+
+def test_limiter_thread_safe():
+    import threading
+    lim = SlidingWindowLimiter(10)
+    results = []
+    barrier = threading.Barrier(50)
+
+    def work():
+        barrier.wait()
+        results.append(lim.allow("k"))
+
+    ts = [threading.Thread(target=work) for _ in range(50)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert results.count(True) == 10

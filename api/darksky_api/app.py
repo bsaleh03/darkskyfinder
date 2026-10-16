@@ -28,7 +28,9 @@ log = logging.getLogger("darksky_api")
 def _client_ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
     if fwd:
-        return fwd.split(",")[0].strip()
+        parts = [p.strip() for p in fwd.split(",")]
+        if len(parts) >= config.TRUSTED_PROXY_HOPS and parts[-config.TRUSTED_PROXY_HOPS]:
+            return parts[-config.TRUSTED_PROXY_HOPS]
     return request.client.host if request.client else "unknown"
 
 

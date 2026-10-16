@@ -66,7 +66,15 @@ def test_rate_limit(client):
 def test_forwarded_for_used_for_rate_limit(client):
     params = {"lat": CITY[1], "lon": CITY[0]}
     for _ in range(3):
-        client.get("/api/spots", params=params, headers={"X-Forwarded-For": "1.1.1.1, 10.0.0.1"})
+        client.get("/api/spots", params=params, headers={"X-Forwarded-For": "6.6.6.6, 1.1.1.1"})
+    # spoofed left part does not evade the limit: same real (right-most) IP
+    assert client.get("/api/spots", params=params, headers={"X-Forwarded-For": "7.7.7.7, 1.1.1.1"}).status_code == 429
+
+
+def test_forwarded_for_distinct_clients(client):
+    params = {"lat": CITY[1], "lon": CITY[0]}
+    for _ in range(3):
+        client.get("/api/spots", params=params, headers={"X-Forwarded-For": "1.1.1.1"})
     assert client.get("/api/spots", params=params, headers={"X-Forwarded-For": "2.2.2.2"}).status_code == 200
 
 
