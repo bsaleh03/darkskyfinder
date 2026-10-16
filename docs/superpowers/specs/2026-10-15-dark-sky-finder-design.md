@@ -67,6 +67,7 @@ Synthesized from Sky Guide, Star Walk 2, DarkSky International, PhotoPills, Stel
   - Secondary violet `#A58BE0`
   - Go / Maybe / No: `#7FD6A0` / `#F0C070` / `#F0808A` (go/no-go only)
 - **Visual elements:** subtle starfield background, mountain/horizon silhouette under the header, translucent "glass" cards (`rgba(20,24,48,.55)`, blur, 1px light border), mini sky previews whose star density reflects darkness.
+- **No box shadows** anywhere (cards, panels, buttons, map controls, popovers). Depth comes only from translucency, background blur, and 1px borders; focus states use an outline, not a glow.
 - **Red mode:** all tokens swap to red-on-black; map switches to a dark-red style; persisted in localStorage.
 - **Accessibility:** keyboard navigable, labeled controls, status never by color alone (text + icon).
 
