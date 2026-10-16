@@ -188,3 +188,53 @@ def test_fall_back_hours_get_distinct_forecasts(store):
     ones = [h for h in r["spots"][0]["timeline"] if h["time"][11:13] == "01"]
     assert [h["time"][-6:] for h in ones] == ["-04:00", "-05:00"]
     assert [h["cloud"] for h in ones] == [0.0, 100.0]
+
+
+def _at(y, mo, d, h, mi=0):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return lambda tz: datetime(y, mo, d, h, mi, tzinfo=ZoneInfo(tz))
+
+
+def _run_now(store, now, **kw):
+    q = SpotsQuery(lat=CITY[1], lon=CITY[0], **kw)
+    return find_spots(store, FakeRouting(MINUTES), FakeForecast(), q, now=now)
+
+
+def test_after_midnight_default_night_is_previous_date(store):
+    now = _at(2026, 10, 17, 1)
+    r = _run_now(store, now)
+    assert r["night"] == "2026-10-16"
+    assert _run_now(store, now, night=date(2026, 10, 16))["night"] == "2026-10-16"
+    assert _run_now(store, now, night=date(2026, 10, 22))["night"] == "2026-10-22"
+    with pytest.raises(QueryError) as e:
+        _run_now(store, now, night=date(2026, 10, 23))
+    assert e.value.detail == {"min": "2026-10-16", "max": "2026-10-22"}
+    tl = r["spots"][0]["timeline"]
+    assert [h["past"] for h in tl if h["time"] < "2026-10-17T01"] == [True] * 4  # 21:00..00:00 ended
+    assert not any(h["past"] for h in tl if h["time"] >= "2026-10-17T01")
+
+
+def test_after_dawn_default_night_is_today(store):
+    r = _run_now(store, _at(2026, 10, 17, 9))
+    assert r["night"] == "2026-10-17"
+    with pytest.raises(QueryError):
+        _run_now(store, _at(2026, 10, 17, 9), night=date(2026, 10, 16))
+
+
+def test_late_evening_past_slots_excluded(store):
+    r = _run_now(store, _at(2026, 10, 16, 23, 30))
+    top = r["spots"][0]
+    past = [h["time"][11:16] for h in top["timeline"] if h["past"]]
+    assert past == ["21:00", "22:00"]
+    assert top["best_window"]["start"] >= "2026-10-16T23:00"
+    assert r["verdict"]["best_window"]["start"] >= "2026-10-16T23:00"
+    assert "11:00 PM" in r["verdict"]["sentence"]
+
+
+def test_future_night_has_no_past_slots(store):
+    r = _run_now(store, _at(2026, 10, 16, 23, 30), night=date(2026, 10, 18))
+    assert not any(h["past"] for h in r["spots"][0]["timeline"])
+    assert all("past" in h for h in r["spots"][0]["timeline"])
+    assert not any(h["past"] for h in run(store)["spots"][0]["timeline"])

@@ -72,6 +72,7 @@ class TimelineHour(BaseModel):
     cloud: float | None
     fog: bool
     moon_up: bool
+    past: bool
 
 
 class Spot(BaseModel):

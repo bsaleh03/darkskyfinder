@@ -38,29 +38,43 @@ ACCESS_ALLOWED = {"all": {"verified", "likely", "check_hours"}, "likely": {"veri
                   "verified": {"verified"}}
 
 
-def _today(tz: str) -> date:
-    return datetime.now(ZoneInfo(tz)).date()
+def _now(tz: str) -> datetime:
+    return datetime.now(ZoneInfo(tz))
 
 
 def _iso(dt: datetime | None) -> str | None:
     return None if dt is None else dt.isoformat(timespec="minutes")
 
 
-def _resolve(store: DataStore, q: SpotsQuery, today: Callable[[str], date]) -> tuple[MetroData, date]:
+def _resolve(store: DataStore, q: SpotsQuery, today: Callable[[str], date] | None,
+             now: Callable[[str], datetime] | None) -> tuple[MetroData, date, datetime | None]:
+    """Metro, night and the local current time (None when only `today` was injected).
+
+    The current night is yesterday's date until that night's dark window ends (dawn)."""
     metro = store.metro_for(q.lon, q.lat)
     if metro is None:
         raise QueryError("out_of_coverage", {"metros": sorted(store.metros)})
-    first = today(metro.info.timezone)
+    tz = metro.info.timezone
+    current: datetime | None = None
+    if now is None and today is not None:
+        first = today(tz)
+    else:
+        current = (now or _now)(tz)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=ZoneInfo(tz))
+        prev = current.date() - timedelta(days=1)
+        first = prev if current < dark_window(q.lat, q.lon, prev, tz).end else current.date()
     night = q.night or first
     if not (first <= night <= first + timedelta(days=config.NIGHT_DAYS_AHEAD)):
         raise QueryError("night_out_of_range",
                          {"min": first.isoformat(), "max": (first + timedelta(days=config.NIGHT_DAYS_AHEAD)).isoformat()})
-    return metro, night
+    return metro, night, current
 
 
 def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
-               today: Callable[[str], date] | None = None) -> dict:
-    metro, night = _resolve(store, q, today or _today)
+               today: Callable[[str], date] | None = None,
+               now: Callable[[str], datetime] | None = None) -> dict:
+    metro, night, current = _resolve(store, q, today, now)
     tz = metro.info.timezone
     home = metro.grid.sample_lonlat(q.lon, q.lat)
     home_sqm = None if math.isnan(home) else home
@@ -81,6 +95,9 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
 
     window = dark_window(q.lat, q.lon, night, tz)
     slots_t = hourly_slots(window)
+    # On the night in progress, hours that already ended are shown but not scored.
+    live = current is not None and window.start <= current <= window.end
+    past = [live and t + timedelta(hours=1) <= current for t in slots_t]
     clat, clon = metro.info.center[1], metro.info.center[0]
     moon = moon_info(clat, clon, night, tz, window)
     up = [moon_up(clat, clon, t) for t in slots_t]
@@ -102,14 +119,15 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
             quality, fog = hour_quality(hw.cloud if hw else None, hw.cloud_low if hw else None,
                                         hw.visibility if hw else None, is_up, moon.illumination)
             slots.append(Slot(t, quality, hw.cloud if hw else None, fog, is_up))
-        win = best_window(slots)
+        ahead = [sl for sl, p in zip(slots, past) if not p]
+        win = best_window(ahead)
         site = site_score(s)
-        cond = conditions_score(slots, win)
+        cond = conditions_score(ahead, win)
         bv = site * cond / 100.0
         rel = relevant_score(bv, minutes[s["id"]], q.max_drive, s["access"]["badge"])
         win_times = None
         if win is not None:
-            win_times = (slots[win[0]].time, min(slots[win[1] - 1].time + timedelta(hours=1), window.end))
+            win_times = (ahead[win[0]].time, min(ahead[win[1] - 1].time + timedelta(hours=1), window.end))
         scored.append({
             **s,
             "drive_minutes": round(minutes[s["id"]]),
@@ -117,10 +135,10 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
             "darker_than_home": darker_than_home(s["sqm"], home if home_sqm is not None else float("nan")),
             "scores": {"site": round(site), "conditions": round(cond), "best_view": round(bv), "relevant": round(rel)},
             "timeline": [{"time": _iso(sl.time), "quality": round(sl.quality, 3), "cloud": sl.cloud,
-                          "fog": sl.fog, "moon_up": sl.moon_up} for sl in slots],
+                          "fog": sl.fog, "moon_up": sl.moon_up, "past": p} for sl, p in zip(slots, past)],
             "best_window": None if win_times is None else {"start": _iso(win_times[0]), "end": _iso(win_times[1])},
             "_sort": {"relevant": rel, "best_view": bv, "closest": minutes[s["id"]], "conditions": cond,
-                      "window": win_times, "mean_cloud": _mean([sl.cloud for sl in slots])},
+                      "window": win_times, "mean_cloud": _mean([sl.cloud for sl in ahead])},
         })
 
     by_view = sorted(scored, key=lambda x: (-x["_sort"]["best_view"], x["id"]))

@@ -45,6 +45,17 @@ def test_spots_ok(client):
     assert "secret-key" not in r.text
 
 
+def test_spots_current_night_marks_past_hours(store):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    app = create_app(store, FakeRouting(MINUTES), FakeForecast(), SETTINGS,
+                     now=lambda tz: datetime(2026, 10, 17, 1, tzinfo=ZoneInfo(tz)))
+    body = TestClient(app).get("/api/spots", params={"lat": CITY[1], "lon": CITY[0]}).json()
+    assert body["night"] == "2026-10-16"
+    assert body["spots"][0]["timeline"][0]["past"] is True
+
+
 def test_spots_errors(client):
     r = client.get("/api/spots", params={"lat": 30, "lon": -90})
     assert r.status_code == 422 and r.json()["error"] == "out_of_coverage"

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
+from datetime import date, datetime
 from typing import Callable, Literal
 
 import httpx
@@ -36,7 +36,8 @@ def _client_ip(request: Request) -> str:
 
 def create_app(store: DataStore, routing, forecast, settings: Settings,
                limiter: SlidingWindowLimiter | None = None,
-               today: Callable[[str], date] | None = None) -> FastAPI:
+               today: Callable[[str], date] | None = None,
+               now: Callable[[str], datetime] | None = None) -> FastAPI:
     app = FastAPI(title="Dark Sky Finder API", version="0.1.0")
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_methods=["GET"],
                        allow_headers=["*"])
@@ -81,7 +82,7 @@ def create_app(store: DataStore, routing, forecast, settings: Settings,
         if not limiter.allow(_client_ip(request)):
             return JSONResponse(status_code=429, content={"error": "rate_limited"})
         q = SpotsQuery(lat=lat, lon=lon, night=night, max_drive=max_drive, access=access, sort=sort, limit=limit)
-        return find_spots(store, routing, forecast, q, today=today)
+        return find_spots(store, routing, forecast, q, today=today, now=now)
 
     return app
 
