@@ -1,7 +1,246 @@
-export default function App() {
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { makeQueryClient, useNightDots, useRegions, useSpots, useWarmup } from './api/queries'
+import type { Region, SearchHit } from './api/types'
+import { Controls } from './components/Controls'
+import { EmptyState } from './components/EmptyState'
+import { ErrorState } from './components/ErrorState'
+import { NightPicker, nextNights } from './components/NightPicker'
+import { SpotList } from './components/SpotList'
+import { TopBar } from './components/TopBar'
+import { VerdictCard } from './components/VerdictCard'
+import { LoadingCards, WakingUp } from './components/WakingUp'
+import { Welcome } from './components/Welcome'
+import { MapView } from './map/MapView'
+import { useRedMode } from './state/redMode'
+import { useAppState } from './state/useAppState'
+import './AppLayout.css'
+
+type LatLon = { lat: number; lon: number }
+
+const MAX_DRIVE = 180
+
+export function regionFor(regions: Region[], p: LatLon): Region | undefined {
+  return regions.find((r) => {
+    const [w, s, e, n] = r.bbox
+    return p.lon >= w && p.lon <= e && p.lat >= s && p.lat <= n
+  })
+}
+
+/** Calendar date (YYYY-MM-DD) right now in the given IANA timezone. */
+export function calendarDate(timeZone: string, now = new Date()): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(now)
+    const get = (t: string) => parts.find((p) => p.type === t)?.value
+    return `${get('year')}-${get('month')}-${get('day')}`
+  } catch {
+    return null
+  }
+}
+
+const pointKey = (p: LatLon) => `${p.lat},${p.lon}`
+
+export default function App({ client }: { client?: QueryClient }) {
+  const [qc] = useState(() => client ?? makeQueryClient())
   return (
-    <header>
-      <h1>Dark Sky Finder</h1>
-    </header>
+    <QueryClientProvider client={qc}>
+      <Main />
+    </QueryClientProvider>
+  )
+}
+
+function Main() {
+  useWarmup()
+  const qc = useQueryClient()
+  const [state, update] = useAppState()
+  const [red] = useRedMode()
+  const regions = useRegions()
+  const spots = useSpots(state)
+  const data = spots.data
+
+  // Names of searched places by coordinate; any other start is a "Dropped pin".
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [focus, setFocus] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [mapFull, setMapFull] = useState(false)
+  // The API's own "tonight" per metro (it stays on yesterday's date until dawn).
+  const [tonight, setTonight] = useState<Record<string, string>>({})
+
+  const start = state.start
+  const region = start ? regionFor(regions, start) : undefined
+  const metro = region?.key ?? data?.metro ?? null
+  const timezone = data?.timezone ?? region?.timezone ?? null
+  const startName = start ? names[pointKey(start)] : undefined
+  const startLabel = start ? (startName ?? 'Dropped pin') : null
+
+  useEffect(() => {
+    if (!data || state.night !== null) return
+    setTonight((t) => (t[data.metro] === data.night ? t : { ...t, [data.metro]: data.night }))
+  }, [data, state.night])
+
+  const today = (metro && tonight[metro]) || (timezone ? calendarDate(timezone) : null)
+  const nights = useMemo(() => (today ? nextNights(today) : []), [today])
+  const dots = useNightDots(state, nights)
+
+  // A stale or hand-edited night the API rejects falls back to tonight.
+  const errKind = spots.error?.kind
+  useEffect(() => {
+    if (errKind === 'night_out_of_range' && state.night !== null) update({ night: null }, { replace: true })
+  }, [errKind, state.night, update])
+
+  // Entering red mode hides the glow layer once; a later manual toggle is respected.
+  const prevRed = useRef(red)
+  useEffect(() => {
+    if (red && !prevRed.current) update({ glow: false }, { replace: true })
+    prevRed.current = red
+  }, [red, update])
+
+  function setStart(p: LatLon, label: string | null) {
+    const at = { lat: p.lat, lon: p.lon }
+    setNames((n) => {
+      const next = { ...n }
+      if (label) next[pointKey(at)] = label
+      else delete next[pointKey(at)]
+      return next
+    })
+    setNotice(null)
+    setMapFull(false)
+    update({ start: at, spot: null })
+  }
+
+  const onPick = (hit: SearchHit) => {
+    setFocus(hit.metro)
+    setStart(hit, hit.name)
+  }
+  const onLocate = (p: LatLon) => {
+    setFocus(regionFor(regions, p)?.key ?? null)
+    setStart(p, null)
+  }
+  const onRegion = (key: string) => {
+    setFocus(key)
+    setNotice(null)
+    setMapFull(false)
+    if (start) update({ start: null, spot: null })
+  }
+  const toggleSpot = (id: string) => update({ spot: state.spot === id ? null : id })
+
+  const nightError = errKind === 'night_out_of_range' && state.night !== null
+  const error = spots.error && !nightError ? spots.error : undefined
+  const showVerified = data?.spots.some((s) => s.access.badge === 'verified') ?? false
+
+  let body
+  if (error) {
+    body = (
+      <ErrorState
+        error={error}
+        regions={regions}
+        onRegion={onRegion}
+        onRetry={() => void qc.refetchQueries({ queryKey: ['spots'] })}
+      />
+    )
+  } else if (spots.waking) {
+    body = <WakingUp />
+  } else if (!data) {
+    body = <LoadingCards />
+  } else if (data.spots.length === 0) {
+    body = <EmptyState drive={state.drive} onWiden={(drive) => update({ drive: Math.min(MAX_DRIVE, drive) })} />
+  } else {
+    body = (
+      <SpotList
+        spots={data.spots}
+        selectedId={state.spot}
+        homeSqm={data.start.sqm}
+        homeLabel={startName ?? 'Home'}
+        timezone={data.timezone}
+        onToggle={toggleSpot}
+      />
+    )
+  }
+
+  const appClass = `app ${start ? 'app--results' : 'app--welcome'}${start && mapFull ? ' app--map-full' : ''}`
+  return (
+    <div className={appClass}>
+      {start ? (
+        <div className="app-top">
+          <p className="app-name">Dark Sky Finder</p>
+          <TopBar
+            startLabel={startLabel}
+            regions={regions}
+            metro={metro}
+            onMetroChange={onRegion}
+            onPick={onPick}
+            onLocate={onLocate}
+            onLocateError={setNotice}
+          />
+          {notice && (
+            <p className="app-notice" role="status">
+              {notice}
+            </p>
+          )}
+          {nights.length > 0 && (
+            <NightPicker
+              nights={nights}
+              value={state.night ?? nights[0]}
+              dots={dots}
+              onChange={(n) => update({ night: n === nights[0] ? null : n, spot: null })}
+            />
+          )}
+          {data && (
+            <VerdictCard
+              verdict={data.verdict}
+              forecastStatus={data.forecast_status}
+              driveStatus={data.drive_status}
+              timezone={data.timezone}
+            />
+          )}
+        </div>
+      ) : (
+        <Welcome
+          regions={regions}
+          focusRegion={focus}
+          notice={notice}
+          onPick={onPick}
+          onLocate={onLocate}
+          onLocateError={setNotice}
+          onRegion={onRegion}
+        />
+      )}
+      <div className="app-map">
+        <MapView
+          spots={data?.spots ?? []}
+          start={start}
+          selectedId={state.spot}
+          glow={state.glow}
+          red={red}
+          regions={regions}
+          focusRegion={focus ?? metro ?? undefined}
+          onSelect={(id) => {
+            setMapFull(false)
+            update({ spot: id })
+          }}
+          onSetStart={(p) => setStart(p, null)}
+          onToggleGlow={() => update({ glow: !state.glow })}
+        />
+        {start && (
+          <button
+            type="button"
+            className="ctl-btn app-map-expand"
+            aria-pressed={mapFull}
+            onClick={() => setMapFull((v) => !v)}
+          >
+            {mapFull ? 'Show list' : 'Full map'}
+          </button>
+        )}
+      </div>
+      {start && (
+        <main className="app-list">
+          {error?.kind !== 'out_of_coverage' && (
+            <Controls state={state} metro={metro} showVerified={showVerified} onChange={(patch) => update(patch)} />
+          )}
+          {body}
+        </main>
+      )}
+    </div>
   )
 }

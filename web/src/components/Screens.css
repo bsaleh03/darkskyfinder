@@ -1,0 +1,124 @@
+.welcome {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 480px;
+  margin: 16px;
+  padding: 18px 16px;
+  color: var(--ink);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+}
+
+.welcome-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.welcome-brand .app-name {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.welcome-headline {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.welcome-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.welcome-search > :first-child {
+  flex: 1 1 220px;
+}
+
+.welcome-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.region-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.region-chip--active {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  color: var(--ink);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+}
+
+.state-title {
+  margin: 0;
+  font-weight: 800;
+}
+
+.state-text {
+  margin: 0;
+  color: var(--muted);
+}
+
+.state-action:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.spot-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spot-skeleton {
+  height: 88px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (width >= 900px) {
+  .welcome {
+    margin: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spot-skeleton {
+    animation: none;
+  }
+}

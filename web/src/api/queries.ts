@@ -1,8 +1,8 @@
 import { QueryClient, useQueries, useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import type { AppState } from '../state/useAppState'
-import { ApiError, fetchHealth, fetchSearch, fetchSpots } from './client'
-import type { Rating, SearchHit, SpotsParams, SpotsResponse } from './types'
+import { ApiError, fetchHealth, fetchRegions, fetchSearch, fetchSpots } from './client'
+import type { Rating, Region, SearchHit, SpotsParams, SpotsResponse } from './types'
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000]
 const WAKING_AFTER_MS = 3000
@@ -170,6 +170,22 @@ export function useSearch(q: string): { hits: SearchHit[]; loading: boolean } {
     hits: settled ? (query.data ?? []) : [],
     loading: !settled || query.isFetching,
   }
+}
+
+// ---- regions ----
+
+const NO_REGIONS: Region[] = []
+
+/** Coverage regions, fetched once and cached for the session. */
+export function useRegions(): Region[] {
+  const q = useQuery<Region[], ApiError>({
+    queryKey: ['regions'],
+    queryFn: () => fetchRegions(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: (failureCount, err) => isRetryable(err) && failureCount < 3,
+  })
+  return q.data ?? NO_REGIONS
 }
 
 // ---- warm-up ----
