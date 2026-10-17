@@ -22,24 +22,41 @@ function setup(over: Partial<AppState> = {}, metro: string | null = 'se_mi', sho
 }
 
 describe('Controls', () => {
-  it('slider emits snapped values', () => {
+  it('slider label follows the drag but commits once on release', () => {
     const onChange = setup()
     expect(screen.getByText('Within 90 min')).toBeInTheDocument()
     const slider = screen.getByRole('slider')
-    fireEvent.change(slider, { target: { value: '120' } })
-    expect(onChange).toHaveBeenLastCalledWith({ drive: 120 })
-    fireEvent.change(slider, { target: { value: '137' } })
-    expect(onChange).toHaveBeenLastCalledWith({ drive: 135 }, { replace: true })
+    for (const v of ['105', '120', '137']) fireEvent.input(slider, { target: { value: v } })
+    expect(screen.getByText('Within 135 min')).toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
+    fireEvent.pointerUp(slider)
+    expect(onChange.mock.calls).toEqual([[{ drive: 135 }]])
   })
 
-  it('slider pushes once per gesture, then replaces', () => {
+  it('slider commits on change, keyup, blur and pointercancel', () => {
     const onChange = setup()
     const slider = screen.getByRole('slider')
-    fireEvent.change(slider, { target: { value: '105' } })
-    fireEvent.change(slider, { target: { value: '120' } })
+    fireEvent.change(slider, { target: { value: '120' } }) // keyboard step or programmatic fill
+    expect(onChange).toHaveBeenLastCalledWith({ drive: 120 })
+    fireEvent.input(slider, { target: { value: '60' } })
+    fireEvent.keyUp(slider, { key: 'ArrowLeft' })
+    expect(onChange).toHaveBeenLastCalledWith({ drive: 60 })
+    fireEvent.input(slider, { target: { value: '150' } })
+    fireEvent.blur(slider)
+    expect(onChange).toHaveBeenLastCalledWith({ drive: 150 })
+    fireEvent.input(slider, { target: { value: '45' } })
+    fireEvent.pointerCancel(slider)
+    expect(onChange).toHaveBeenLastCalledWith({ drive: 45 })
+    expect(onChange).toHaveBeenCalledTimes(4)
+  })
+
+  it('release without moving does not commit', () => {
+    const onChange = setup()
+    const slider = screen.getByRole('slider')
     fireEvent.pointerUp(slider)
-    fireEvent.change(slider, { target: { value: '135' } })
-    expect(onChange.mock.calls).toEqual([[{ drive: 105 }], [{ drive: 120 }, { replace: true }], [{ drive: 135 }]])
+    fireEvent.keyUp(slider, { key: 'Tab' })
+    fireEvent.blur(slider)
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('sort and access emit patches', async () => {
@@ -125,10 +142,11 @@ describe('Controls', () => {
   it('slider clamps edge values', () => {
     const onChange = setup()
     const slider = screen.getByRole('slider')
-    fireEvent.change(slider, { target: { value: '20' } })
+    fireEvent.input(slider, { target: { value: '20' } })
+    fireEvent.pointerUp(slider)
     expect(onChange).toHaveBeenLastCalledWith({ drive: 30 })
-    fireEvent.pointerUp(slider) // separate gesture: pushes again
-    fireEvent.change(slider, { target: { value: '200' } })
+    fireEvent.input(slider, { target: { value: '200' } })
+    fireEvent.pointerUp(slider)
     expect(onChange).toHaveBeenLastCalledWith({ drive: 180 })
   })
 })

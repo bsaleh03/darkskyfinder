@@ -38,6 +38,8 @@ describe('api client', () => {
     expect(url.searchParams.has('night')).toBe(false)
     await fetchSpots({ ...params, night: '2026-10-18' })
     expect(new URL(f.mock.calls[1][0] as string).searchParams.get('night')).toBe('2026-10-18')
+    await fetchSpots({ ...params, sort: undefined, limit: 3 }) // night dots: the verdict ignores sort
+    expect(new URL(f.mock.calls[2][0] as string).searchParams.has('sort')).toBe(false)
   })
 
   it('passes the abort signal', async () => {

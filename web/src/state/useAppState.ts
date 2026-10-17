@@ -109,6 +109,7 @@ function subscribe(listener: () => void): () => void {
 function update(patch: Partial<AppState>, opts?: { replace?: boolean }) {
   const next = parseState(serializeState({ ...getSnapshot(), ...patch }))
   const qs = serializeState(next)
+  if (qs === window.location.search.replace(/^\?/, '')) return // no change: no history entry, no re-render
   const url = window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash
   if (opts?.replace) window.history.replaceState(null, '', url)
   else window.history.pushState(null, '', url)

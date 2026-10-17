@@ -77,11 +77,11 @@ export function fetchSpots(p: SpotsParams, signal?: AbortSignal): Promise<SpotsR
     lat: String(p.lat),
     lon: String(p.lon),
     max_drive: String(p.drive),
-    sort: p.sort,
     access: p.access,
     border: p.border,
     limit: String(p.limit),
   })
+  if (p.sort) q.set('sort', p.sort)
   if (p.night) q.set('night', p.night)
   return request<SpotsResponse>('/api/spots', q, signal)
 }

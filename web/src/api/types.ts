@@ -110,7 +110,8 @@ export interface SpotsParams {
   lon: number
   night?: string
   drive: number
-  sort: SortKey
+  /** Omitted for night dots: the verdict does not depend on the sort order. */
+  sort?: SortKey
   access: AccessKey
   border: BorderKey
   limit: number

@@ -74,6 +74,20 @@ describe('useAppState', () => {
     expect(window.location.search).toBe('?drive=60&sort=closest')
   })
 
+  it('skips the push when nothing changes', () => {
+    window.history.replaceState(null, '', '/?drive=60&sort=closest')
+    const push = vi.spyOn(window.history, 'pushState')
+    const replace = vi.spyOn(window.history, 'replaceState')
+    const { result } = renderHook(() => useAppState())
+    act(() => result.current[1]({ drive: 60 }))
+    act(() => result.current[1]({ sort: 'closest', drive: 65 })) // normalizes back to the same URL
+    act(() => result.current[1]({ drive: 60 }, { replace: true }))
+    expect(push).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+    act(() => result.current[1]({ drive: 75 }))
+    expect(push).toHaveBeenCalledTimes(1)
+  })
+
   it('popstate updates state', () => {
     const { result } = renderHook(() => useAppState())
     act(() => {

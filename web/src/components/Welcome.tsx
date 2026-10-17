@@ -11,13 +11,15 @@ interface Props {
   regions: Region[]
   focusRegion: string | null
   notice: string | null
+  /** The API is slow to answer its first requests (cold start). */
+  waking?: boolean
   onPick: (hit: SearchHit) => void
   onLocate: (p: { lat: number; lon: number }) => void
   onLocateError: (msg: string) => void
   onRegion: (key: string) => void
 }
 
-export function Welcome({ headingRef, regions, focusRegion, notice, onPick, onLocate, onLocateError, onRegion }: Props) {
+export function Welcome({ headingRef, regions, focusRegion, notice, waking, onPick, onLocate, onLocateError, onRegion }: Props) {
   return (
     <div className="welcome">
       <header className="welcome-brand">
@@ -31,6 +33,11 @@ export function Welcome({ headingRef, regions, focusRegion, notice, onPick, onLo
       </div>
       <RegionChips regions={regions} active={focusRegion} onPick={onRegion} />
       <p className="welcome-hint">Pick a region, then tap the map to set your start.</p>
+      {waking && (
+        <p className="app-notice" role="status">
+          Waking up the stargazing engine…
+        </p>
+      )}
       {notice && (
         <p className="app-notice" role="status">
           {notice}

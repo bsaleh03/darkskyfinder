@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useRef } from 'react'
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import type { AccessKey, SortKey } from '../api/types'
 import type { AppState } from '../state/useAppState'
 import './controls.css'
@@ -8,8 +8,8 @@ interface Props {
   state: AppState
   metro: string | null
   showVerified: boolean
-  /** `replace` is set for slider moves after the first in one drag, so history gets one entry per gesture. */
-  onChange: (patch: Partial<AppState>, opts?: { replace: true }) => void
+  /** The drive slider commits once per gesture (on release), so one drag is one request and one history entry. */
+  onChange: (patch: Partial<AppState>) => void
 }
 
 const MIN = 30
@@ -70,10 +70,29 @@ const SORTS: { value: SortKey; label: string }[] = [
 ]
 
 export function Controls({ state, metro, showVerified, onChange }: Props) {
-  const dragging = useRef(false)
-  const endGesture = () => {
-    dragging.current = false
+  // While dragging, only the label follows the thumb; the URL (and the request) updates on release.
+  const [draft, setDraft] = useState<number | null>(null)
+  const slider = useRef<HTMLInputElement>(null)
+  const latest = useRef({ drive: state.drive, onChange })
+  latest.current = { drive: state.drive, onChange }
+  useEffect(() => setDraft(null), [state.drive])
+  const commitRef = useRef(() => {})
+  commitRef.current = () => {
+    const el = slider.current
+    if (!el) return
+    const drive = snap(Number(el.value))
+    setDraft(null)
+    if (drive !== latest.current.drive) latest.current.onChange({ drive })
   }
+  const commit = () => commitRef.current()
+  // React's onChange fires on every `input`; the native `change` marks the end of a drag or a keyboard step.
+  useEffect(() => {
+    const el = slider.current
+    const onNativeChange = () => commitRef.current()
+    el?.addEventListener('change', onNativeChange)
+    return () => el?.removeEventListener('change', onNativeChange)
+  }, [])
+  const shown = draft ?? state.drive
   const accessOptions: { value: AccessKey; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'likely', label: 'Likely open' },
@@ -82,23 +101,22 @@ export function Controls({ state, metro, showVerified, onChange }: Props) {
   return (
     <div className="controls">
       <label className="controls-row">
-        <span className="controls-label">Within {state.drive} min</span>
+        <span className="controls-label">Within {shown} min</span>
         <input
+          ref={slider}
           type="range"
           className="controls-slider"
           min={MIN}
           max={MAX}
           step={STEP}
-          value={state.drive}
+          value={shown}
           onChange={(e) => {
-            const patch = { drive: snap(Number(e.target.value)) }
-            if (dragging.current) onChange(patch, { replace: true })
-            else onChange(patch)
-            dragging.current = true
+            if (e.nativeEvent.type === 'input') setDraft(snap(Number(e.target.value)))
           }}
-          onPointerUp={endGesture}
-          onKeyUp={endGesture}
-          onBlur={endGesture}
+          onPointerUp={commit}
+          onPointerCancel={commit}
+          onKeyUp={commit}
+          onBlur={commit}
         />
       </label>
       <Segmented label="Sort by" value={state.sort} options={SORTS} onSelect={(sort) => onChange({ sort })} />

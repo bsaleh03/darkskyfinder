@@ -1,5 +1,6 @@
-import { QueryClient, useQueries, useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { QueryClient, useIsFetching, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { METROS } from '../config'
 import type { AppState } from '../state/useAppState'
 import { ApiError, fetchHealth, fetchRegions, fetchSearch, fetchSpots } from './client'
 import type { Rating, Region, SearchHit, SpotsParams, SpotsResponse } from './types'
@@ -8,6 +9,12 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000]
 const WAKING_AFTER_MS = 3000
 const DOT_CONCURRENCY = 2
 const SEARCH_DEBOUNCE_MS = 250
+// The API allows 20 /spots requests per minute per client. Background night-dot requests only go out
+// while fewer than DOT_BUDGET /spots requests were made in the last minute, keeping the rest for the
+// user's own changes; dots over budget wait for the window to free up.
+const SPOTS_WINDOW_MS = 60_000
+const DOT_BUDGET = 12
+const REGIONS_RETRY_MS = 30_000
 
 function isRetryable(e: unknown): boolean {
   return e instanceof ApiError && (e.kind === 'server' || e.kind === 'network')
@@ -26,9 +33,49 @@ export function makeQueryClient(): QueryClient {
   })
 }
 
+// ---- /spots request budget ----
+
+let spotsLog: number[] = []
+
+function noteSpotsCall() {
+  spotsLog.push(Date.now())
+}
+
+function recentSpotsCalls(now: number): number {
+  spotsLog = spotsLog.filter((t) => now - t < SPOTS_WINDOW_MS)
+  return spotsLog.length
+}
+
+export function resetSpotsBudgetForTests() {
+  spotsLog = []
+}
+
+/** Resolves once a background request fits in the budget, counting it right away (no check-then-act race). */
+function dotBudget(signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const abort = () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    const check = () => {
+      if (signal?.aborted) return abort()
+      const now = Date.now()
+      if (recentSpotsCalls(now) < DOT_BUDGET) {
+        signal?.removeEventListener('abort', abort)
+        noteSpotsCall()
+        return resolve()
+      }
+      timer = setTimeout(check, spotsLog[0] + SPOTS_WINDOW_MS - now + 1)
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+    check()
+  })
+}
+
 // ---- spots ----
 
-function spotsParams(s: AppState, over?: Partial<SpotsParams>): SpotsParams {
+function spotsParams(s: AppState): SpotsParams {
   return {
     lat: s.start!.lat,
     lon: s.start!.lon,
@@ -38,14 +85,23 @@ function spotsParams(s: AppState, over?: Partial<SpotsParams>): SpotsParams {
     access: s.access,
     border: s.border,
     limit: 25,
-    ...over,
   }
 }
 
+/** The night verdict depends on these only (not on sort or limit). */
+const dotKey = (s: AppState, night: string) => ['dot', s.start, night, s.drive, s.access, s.border]
+
 function useSpotsQuery(s: AppState) {
+  const qc = useQueryClient()
   return useQuery<SpotsResponse, ApiError>({
     queryKey: ['spots', s.start, s.night, s.drive, s.sort, s.access, s.border],
-    queryFn: ({ signal }) => fetchSpots(spotsParams(s), signal),
+    queryFn: async ({ signal }) => {
+      noteSpotsCall()
+      const r = await fetchSpots(spotsParams(s), signal)
+      // The night shown already carries its verdict: that night's dot needs no request of its own.
+      if (r.night && r.verdict) qc.setQueryData(dotKey(s, r.night), r.verdict.rating)
+      return r
+    },
     enabled: s.start !== null,
     // Keep the previous result on screen while filters change, but never carry
     // one start's spots over to a different start.
@@ -57,33 +113,45 @@ function useSpotsQuery(s: AppState) {
   })
 }
 
-export function useSpots(s: AppState): {
-  data?: SpotsResponse
-  error?: ApiError
-  isLoading: boolean
-  waking: boolean
-  /** `data` belongs to the previous params while the new ones load. */
-  stale: boolean
-  refetch: () => void
-} {
-  const q = useSpotsQuery(s)
-  const loading = q.isLoading
+/** Becomes true once `active` has stayed true for 3 s. */
+function useSlow(active: boolean): boolean {
   const [slow, setSlow] = useState(false)
   useEffect(() => {
-    if (!loading) {
+    if (!active) {
       setSlow(false)
       return
     }
     const t = setTimeout(() => setSlow(true), WAKING_AFTER_MS)
     return () => clearTimeout(t)
-  }, [loading])
+  }, [active])
+  return active && slow
+}
+
+export function useSpots(s: AppState): {
+  data?: SpotsResponse
+  error?: ApiError
+  isLoading: boolean
+  waking: boolean
+  /** `data` belongs to other params: the previous ones while the new ones load, or after a 429. */
+  stale: boolean
+  refetch: () => void
+} {
+  const q = useSpotsQuery(s)
+  const loading = q.isLoading
+  const slow = useSlow(loading)
+  // Last good result for this start, kept on screen when a request is rate limited.
+  const lastGood = useRef<{ start: string; data: SpotsResponse } | null>(null)
+  const startKey = JSON.stringify(s.start)
+  if (q.data && !q.isPlaceholderData) lastGood.current = { start: startKey, data: q.data }
+  const kept =
+    q.error?.kind === 'rate_limited' && lastGood.current?.start === startKey ? lastGood.current.data : undefined
   const retrying = q.isFetching && q.failureCount > 0 && isRetryable(q.failureReason)
   return {
-    data: q.data,
+    data: q.data ?? kept,
     error: q.error ?? undefined,
     isLoading: loading,
-    waking: (loading && slow) || retrying,
-    stale: q.isPlaceholderData,
+    waking: slow || retrying,
+    stale: q.isPlaceholderData || kept !== undefined,
     refetch: () => void q.refetch(),
   }
 }
@@ -127,11 +195,13 @@ export function useNightDots(s: AppState, nights: string[]): Record<string, Dot 
   const ready = main.isSuccess && !main.isPlaceholderData
   const results = useQueries({
     queries: nights.map((night) => ({
-      queryKey: ['dot', s.start, night, s.drive, s.sort, s.access, s.border],
+      queryKey: dotKey(s, night),
       queryFn: async ({ signal }: { signal: AbortSignal }) => {
         await acquire(signal)
         try {
-          const r = await fetchSpots(spotsParams(s, { night, limit: 3 }), signal)
+          await dotBudget(signal)
+          const { sort: _sort, ...params } = spotsParams(s)
+          const r = await fetchSpots({ ...params, night, limit: 3 }, signal)
           return r.verdict.rating
         } finally {
           release()
@@ -184,9 +254,7 @@ export function useSearch(q: string): { hits: SearchHit[]; loading: boolean } {
 
 // ---- regions ----
 
-const NO_REGIONS: Region[] = []
-
-/** Coverage regions, fetched once and cached for the session. */
+/** Coverage regions: the static metros right away, replaced by /api/regions once it answers. */
 export function useRegions(): Region[] {
   const q = useQuery<Region[], ApiError>({
     queryKey: ['regions'],
@@ -194,22 +262,27 @@ export function useRegions(): Region[] {
     staleTime: Infinity,
     gcTime: Infinity,
     retry: (failureCount, err) => isRetryable(err) && failureCount < 3,
+    // A failed load is tried again later instead of staying failed for the session.
+    refetchInterval: (query) => (query.state.status === 'error' ? REGIONS_RETRY_MS : false),
   })
-  return q.data ?? NO_REGIONS
+  return q.data ?? METROS
 }
 
 // ---- warm-up ----
 
-let warmed = false
-
-export function resetWarmupForTests() {
-  warmed = false
+/** Pings /api/health once per session so a sleeping API starts waking before the first search. */
+export function useWarmup(): void {
+  useQuery({
+    queryKey: ['health'],
+    queryFn: () => fetchHealth(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  })
 }
 
-export function useWarmup(): void {
-  useEffect(() => {
-    if (warmed) return
-    warmed = true
-    fetchHealth().catch(() => {})
-  }, [])
+/** True once the health ping or the regions request has been pending for more than 3 s. */
+export function useStartupWaking(): boolean {
+  const n = useIsFetching({ predicate: (q) => q.queryKey[0] === 'health' || q.queryKey[0] === 'regions' })
+  return useSlow(n > 0)
 }

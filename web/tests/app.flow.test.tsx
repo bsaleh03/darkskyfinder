@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App'
-import { resetWarmupForTests } from '../src/api/queries'
+import { makeQueryClient, resetSpotsBudgetForTests } from '../src/api/queries'
 import * as client from '../src/api/client'
 import { ApiError } from '../src/api/client'
 import type { Region, Spot, SpotsResponse } from '../src/api/types'
@@ -107,7 +107,7 @@ async function advance(ms: number) {
 }
 
 beforeEach(() => {
-  resetWarmupForTests()
+  resetSpotsBudgetForTests()
   mapProps.current = null
   fetchSpots.mockReset()
   fetchRegions.mockReset().mockResolvedValue(REGIONS)
@@ -276,7 +276,7 @@ describe('App flow', () => {
     expect(await screen.findByText('Great night for stars.')).toBeInTheDocument()
   })
 
-  it('entering red mode turns glow off with replace, and the user can turn it back on', async () => {
+  it('red mode forces glow off without touching the URL; leaving it restores the setting', async () => {
     go(START)
     fetchSpots.mockResolvedValue(response())
     render(<App />)
@@ -285,25 +285,112 @@ describe('App flow', () => {
     const before = window.history.length
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
     expect(document.documentElement.dataset.red).toBe('true')
-    await waitFor(() => expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'false'))
-    expect(new URLSearchParams(window.location.search).get('glow')).toBe('0')
+    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'false')
+    expect(mapProps.current?.red).toBe(true)
+    expect(window.location.search).toBe('?lat=42.49&lon=-83.14')
     expect(window.history.length).toBe(before)
-    act(() => mapProps.current!.onToggleGlow())
+    fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
     expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'true')
-    expect(new URLSearchParams(window.location.search).get('glow')).toBeNull()
   })
 
-  it('drive slider drag adds at most one history entry', async () => {
+  it('a glow=0 URL stays off after leaving red mode', async () => {
+    go(`${START}&glow=0`)
+    localStorage.setItem('dsf.red', '1')
+    fetchSpots.mockResolvedValue(response())
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'false')
+    fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
+    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'false')
+    expect(new URLSearchParams(window.location.search).get('glow')).toBe('0')
+  })
+
+  it('drive slider drag adds one history entry and one request', async () => {
     go(START)
     fetchSpots.mockResolvedValue(response())
     render(<App />)
     await screen.findByText('Great night for stars.')
     const before = window.history.length
+    const mains = () => fetchSpots.mock.calls.filter((c) => c[0].limit === 25).length
+    expect(mains()).toBe(1)
     const slider = screen.getByRole('slider')
-    for (const v of ['105', '120', '135', '150']) fireEvent.change(slider, { target: { value: v } })
+    for (const v of ['105', '120', '135', '150']) fireEvent.input(slider, { target: { value: v } })
+    expect(screen.getByText('Within 150 min')).toBeInTheDocument()
+    expect(window.location.search).not.toContain('drive=')
     fireEvent.pointerUp(slider)
     expect(new URLSearchParams(window.location.search).get('drive')).toBe('150')
     expect(window.history.length).toBe(before + 1)
+    await waitFor(() => expect(mains()).toBe(2))
+    expect(fetchSpots.mock.calls.filter((c) => c[0].limit === 25).map((c) => c[0].drive)).toEqual([90, 150])
+  })
+
+  it('a session of filter changes stays well under the /spots rate limit', async () => {
+    go(START)
+    fetchSpots.mockResolvedValue(response())
+    const qc = makeQueryClient()
+    render(<App client={qc} />)
+    const total = () => fetchSpots.mock.calls.length
+    const dots = () => fetchSpots.mock.calls.filter((c) => c[0].limit === 3).length
+    const pause = () => act(() => new Promise((r) => setTimeout(r, 150)))
+    try {
+      await screen.findByText('Great night for stars.')
+      // Initial load: the main request plus the six other nights (tonight's dot comes from the main response).
+      await waitFor(() => expect(dots()).toBe(6))
+      await pause()
+      expect(total()).toBe(7)
+      const slider = screen.getByRole('slider')
+      for (const v of ['105', '120', '135', '150']) fireEvent.input(slider, { target: { value: v } })
+      fireEvent.pointerUp(slider)
+      await waitFor(() => expect(total()).toBeGreaterThanOrEqual(8))
+      await pause()
+      const dotsBeforeSort = dots()
+      const dotQueries = () => qc.getQueryCache().findAll({ queryKey: ['dot'] }).length
+      const dotQueriesBeforeSort = dotQueries()
+      fireEvent.click(screen.getByRole('radio', { name: 'Closest' }))
+      await waitFor(() => expect(fetchSpots.mock.calls.filter((c) => c[0].sort === 'closest')).toHaveLength(1))
+      await pause()
+      // Sort does not change any night's verdict: no new dot queries, no dot requests.
+      expect(dotQueries()).toBe(dotQueriesBeforeSort)
+      expect(dots()).toBe(dotsBeforeSort)
+      fireEvent.click(screen.getByRole('radio', { name: 'Likely open' }))
+      await waitFor(() => expect(fetchSpots.mock.calls.filter((c) => c[0].access === 'likely' && c[0].limit === 25)).toHaveLength(1))
+      await pause()
+      expect(total()).toBeLessThanOrEqual(14)
+    } finally {
+      await qc.cancelQueries()
+    }
+  })
+
+  it('a 429 keeps the current results with an inline notice', async () => {
+    go(START)
+    fetchSpots.mockImplementation((p) =>
+      p.sort === 'closest'
+        ? Promise.reject(new ApiError('rate_limited', 429, { error: 'rate_limited' }))
+        : Promise.resolve(response()),
+    )
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    fireEvent.click(screen.getByRole('radio', { name: 'Closest' }))
+    expect(await screen.findByText('Too many searches — try again in a minute.')).toBeInTheDocument()
+    expect(screen.getByText('Lake Park Beach')).toBeInTheDocument()
+    expect(screen.getByText('Great night for stars.')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('welcome shows region chips before /api/regions answers, and waking copy after 3 s', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    fetchRegions.mockReturnValue(new Promise(() => {}))
+    fetchHealth.mockReturnValue(new Promise(() => {}))
+    render(<App />)
+    const chips = screen.getByRole('group', { name: 'Regions' })
+    expect(within(chips).getByRole('button', { name: 'SE Michigan' })).toBeInTheDocument()
+    expect(within(chips).getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()
+    fireEvent.click(within(chips).getByRole('button', { name: 'SE Michigan' }))
+    expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'se_mi')
+    expect(mapProps.current?.regions.map((r) => r.key).sort()).toEqual(['bay_area', 'se_mi'])
+    expect(screen.queryByText('Waking up the stargazing engine…')).toBeNull()
+    await advance(3200)
+    expect(screen.getByText('Waking up the stargazing engine…')).toBeInTheDocument()
   })
 
   it('full map is cleared when the viewport becomes desktop', async () => {

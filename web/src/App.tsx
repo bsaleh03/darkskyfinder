@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, errorMessage } from './api/client'
-import { makeQueryClient, useNightDots, useRegions, useSpots, useWarmup } from './api/queries'
+import { makeQueryClient, useNightDots, useRegions, useSpots, useStartupWaking, useWarmup } from './api/queries'
 import type { Region, SearchHit } from './api/types'
 import { Controls } from './components/Controls'
 import { EmptyState } from './components/EmptyState'
@@ -22,6 +22,7 @@ type LatLon = { lat: number; lon: number }
 const MAX_DRIVE = 180
 const DESKTOP = '(min-width: 900px)'
 const COVERAGE = errorMessage(new ApiError('out_of_coverage'))
+const RATE_LIMITED = errorMessage(new ApiError('rate_limited'))
 
 export function regionFor(regions: Region[], p: LatLon): Region | undefined {
   return regions.find((r) => {
@@ -58,6 +59,7 @@ function Main() {
   const [state, update] = useAppState()
   const [red] = useRedMode()
   const regions = useRegions()
+  const startupWaking = useStartupWaking()
   const spots = useSpots(state)
   const data = spots.data
 
@@ -90,13 +92,6 @@ function Main() {
   useEffect(() => {
     if (errKind === 'night_out_of_range' && state.night !== null) update({ night: null }, { replace: true })
   }, [errKind, state.night, update])
-
-  // Entering red mode hides the glow layer once; a later manual toggle is respected.
-  const prevRed = useRef(red)
-  useEffect(() => {
-    if (red && !prevRed.current) update({ glow: false }, { replace: true })
-    prevRed.current = red
-  }, [red, update])
 
   // The full-screen map is a mobile mode: leave it when the viewport becomes desktop.
   useEffect(() => {
@@ -155,7 +150,9 @@ function Main() {
   const toggleSpot = (id: string) => update({ spot: state.spot === id ? null : id })
 
   const nightError = errKind === 'night_out_of_range' && state.night !== null
-  const error = spots.error && !nightError ? spots.error : undefined
+  // A 429 with results already on screen keeps them, with an inline notice instead of the error panel.
+  const rateNotice = errKind === 'rate_limited' && data !== undefined
+  const error = spots.error && !nightError && !rateNotice ? spots.error : undefined
   const showVerified = data?.spots.some((s) => s.access.badge === 'verified') ?? false
 
   let body
@@ -187,7 +184,7 @@ function Main() {
     )
   }
 
-  const busy = spots.stale
+  const busy = spots.stale && !rateNotice
   const appClass = `app ${start ? 'app--results' : 'app--welcome'}${start && mapFull ? ' app--map-full' : ''}`
   return (
     <div className={appClass}>
@@ -234,6 +231,7 @@ function Main() {
           regions={regions}
           focusRegion={focus}
           notice={notice}
+          waking={startupWaking}
           onPick={onPick}
           onLocate={onLocate}
           onLocateError={setNotice}
@@ -245,7 +243,7 @@ function Main() {
           spots={data?.spots ?? []}
           start={start}
           selectedId={state.spot}
-          glow={state.glow}
+          glow={state.glow && !red}
           red={red}
           regions={regions}
           focusRegion={focus ?? metro ?? undefined}
@@ -270,7 +268,12 @@ function Main() {
       {start && (
         <main className={`app-list${busy ? ' app-list--stale' : ''}`} aria-busy={busy}>
           {error?.kind !== 'out_of_coverage' && (
-            <Controls state={state} metro={metro} showVerified={showVerified} onChange={(patch, opts) => update(patch, opts)} />
+            <Controls state={state} metro={metro} showVerified={showVerified} onChange={(patch) => update(patch)} />
+          )}
+          {rateNotice && (
+            <p className="app-notice" role="status">
+              {RATE_LIMITED}
+            </p>
           )}
           {body}
         </main>

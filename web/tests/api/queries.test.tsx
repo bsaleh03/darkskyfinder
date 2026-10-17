@@ -4,17 +4,28 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../src/api/client'
 import * as client from '../../src/api/client'
-import { makeQueryClient, resetWarmupForTests, useNightDots, useSearch, useSpots, useWarmup } from '../../src/api/queries'
+import {
+  makeQueryClient,
+  resetSpotsBudgetForTests,
+  useNightDots,
+  useRegions,
+  useSearch,
+  useSpots,
+  useStartupWaking,
+  useWarmup,
+} from '../../src/api/queries'
+import { METROS } from '../../src/config'
 import type { AppState } from '../../src/state/useAppState'
 
 vi.mock('../../src/api/client', async (orig) => {
   const actual = await orig<typeof import('../../src/api/client')>()
-  return { ...actual, fetchSpots: vi.fn(), fetchSearch: vi.fn(), fetchHealth: vi.fn() }
+  return { ...actual, fetchSpots: vi.fn(), fetchSearch: vi.fn(), fetchHealth: vi.fn(), fetchRegions: vi.fn() }
 })
 
 const fetchSpots = vi.mocked(client.fetchSpots)
 const fetchSearch = vi.mocked(client.fetchSearch)
 const fetchHealth = vi.mocked(client.fetchHealth)
+const fetchRegions = vi.mocked(client.fetchRegions)
 
 const state: AppState = {
   start: { lat: 42.3, lon: -83.1 },
@@ -27,8 +38,8 @@ const state: AppState = {
   spot: null,
 }
 
-function resp(rating = 'good') {
-  return { verdict: { rating }, spots: [] } as unknown as Awaited<ReturnType<typeof client.fetchSpots>>
+function resp(rating = 'good', night?: string) {
+  return { night, verdict: { rating }, spots: [] } as unknown as Awaited<ReturnType<typeof client.fetchSpots>>
 }
 
 function wrapper() {
@@ -52,7 +63,8 @@ beforeEach(() => {
   fetchSpots.mockReset()
   fetchSearch.mockReset()
   fetchHealth.mockReset()
-  resetWarmupForTests()
+  fetchRegions.mockReset()
+  resetSpotsBudgetForTests()
 })
 afterEach(() => vi.useRealTimers())
 
@@ -166,6 +178,78 @@ describe('useNightDots', () => {
     release()
     await tick(100)
     expect(fetchSpots).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('useNightDots requests', () => {
+  const nights = ['2026-10-17', '2026-10-18', '2026-10-19']
+  const dotCalls = () => fetchSpots.mock.calls.filter((c) => c[0].limit === 3).map((c) => c[0])
+
+  it('takes the selected night from the main response and ignores sort', async () => {
+    fetchSpots.mockImplementation(async (p) => resp('good', p.night ?? '2026-10-17'))
+    const { result, rerender } = renderHook(({ s }) => useNightDots(s, nights), {
+      wrapper: wrapper(),
+      initialProps: { s: state },
+    })
+    await settle(500)
+    // Tonight's dot comes from the main (night-less) request; only the other nights are fetched.
+    expect(dotCalls().map((p) => p.night)).toEqual(['2026-10-18', '2026-10-19'])
+    expect(dotCalls()[0]).not.toHaveProperty('sort')
+    expect(result.current['2026-10-17']).toBe('go')
+    rerender({ s: { ...state, sort: 'closest' } })
+    await settle(500)
+    expect(fetchSpots.mock.calls.filter((c) => c[0].limit === 25)).toHaveLength(2)
+    expect(dotCalls()).toHaveLength(2) // sort does not change the verdict
+    rerender({ s: { ...state, sort: 'closest', drive: 120 } })
+    await settle(500)
+    expect(dotCalls()).toHaveLength(4)
+  })
+
+  it('leaves headroom under the API rate limit, finishing the rest a minute later', async () => {
+    const many = Array.from({ length: 16 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`)
+    fetchSpots.mockImplementation(async () => resp())
+    renderHook(() => useNightDots(state, many), { wrapper: wrapper() })
+    await settle(1000)
+    expect(fetchSpots).toHaveBeenCalledTimes(12) // 1 main + 11 dots
+    await settle(60_000, 1000)
+    expect(fetchSpots).toHaveBeenCalledTimes(17)
+  })
+})
+
+describe('regions and start-up', () => {
+  it('uses the static metros until the API answers, and retries a failure later', async () => {
+    fetchRegions.mockRejectedValue(new ApiError('invalid', 400))
+    const { result } = renderHook(() => useRegions(), { wrapper: wrapper() })
+    expect(result.current.map((r) => r.key).sort()).toEqual(['bay_area', 'se_mi'])
+    expect(result.current).toBe(METROS)
+    await tick(100)
+    expect(fetchRegions).toHaveBeenCalledTimes(1)
+    const api = [{ ...METROS[0], name: 'Renamed' }]
+    fetchRegions.mockResolvedValue(api)
+    await settle(31_000, 500)
+    expect(fetchRegions).toHaveBeenCalledTimes(2)
+    expect(result.current).toEqual(api)
+  })
+
+  it('is waking while health or regions are pending for more than 3 s', async () => {
+    let answer!: () => void
+    fetchHealth.mockImplementation(() => new Promise((r) => (answer = () => r({ ok: true, metros: [], release: 'x' }))))
+    fetchRegions.mockResolvedValue(METROS)
+    const { result } = renderHook(
+      () => {
+        useWarmup()
+        useRegions()
+        return useStartupWaking()
+      },
+      { wrapper: wrapper() },
+    )
+    await tick(2900)
+    expect(result.current).toBe(false)
+    await tick(200)
+    expect(result.current).toBe(true)
+    await act(async () => answer())
+    await tick(10)
+    expect(result.current).toBe(false)
   })
 })
 
