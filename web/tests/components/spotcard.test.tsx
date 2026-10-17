@@ -82,6 +82,10 @@ describe('SpotCard', () => {
     expect(screen.getByText('Dark Sky place')).toBeTruthy()
     expect(screen.getByText('Recommended')).toBeTruthy()
     expect(screen.getByText(/Crosses border/)).toBeTruthy()
+    // The flag sits in its own span so red mode can tint it (html[data-red] .emoji filter).
+    const flag = screen.getByText('\u{1F1E8}\u{1F1E6}')
+    expect(flag.tagName).toBe('SPAN')
+    expect(flag).toHaveClass('emoji')
   })
 
   it('unavailable greyed with reason', () => {
@@ -109,6 +113,25 @@ describe('SpotCard', () => {
     const a = screen.getByRole('link', { name: 'Astro Club' })
     expect(a.getAttribute('target')).toBe('_blank')
     expect(a.getAttribute('rel')).toBe('noopener noreferrer')
+  })
+
+  it('sources with non-http URLs render as plain text', () => {
+    show(
+      spot({
+        sources: [
+          { name: 'Good', url: 'http://example.com/b' },
+          { name: 'Script', url: 'javascript:alert(1)' },
+          { name: 'Relative', url: '/local' },
+          { name: 'Data', url: 'data:text/html,hi' },
+        ],
+      }),
+      { expanded: true },
+    )
+    expect(screen.getByRole('link', { name: 'Good' })).toHaveAttribute('href', 'http://example.com/b')
+    for (const name of ['Script', 'Relative', 'Data']) {
+      expect(screen.getByText(name).closest('a')).toBeNull()
+      expect(screen.queryByRole('link', { name })).toBeNull()
+    }
   })
 
   it('renders sparse spot without placeholders', () => {
@@ -193,6 +216,9 @@ describe('fix round 1', () => {
       />,
     )
     expect(screen.getByLabelText('9:00 PM, good, cloud 10%, fog, moon up')).toBeTruthy()
+    // Text presentation (U+FE0E) so the glyphs draw in the token colour, never as colour emoji.
+    expect(screen.getByText('☁︎10')).toBeTruthy()
+    expect(screen.getByText('☾︎')).toBeTruthy()
   })
 
   it('unavailable without reason and non-finite numbers stay clean', () => {

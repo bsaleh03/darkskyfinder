@@ -176,12 +176,20 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await expect(page.getByText('Within 60 min')).toBeVisible()
   await expect(page).toHaveURL(/drive=60/)
 
-  // Red mode tints the page and turns the glow layer off.
+  // Red mode tints the page and forces the glow layer off (without touching the URL setting).
+  const glowBtn = page.getByRole('button', { name: 'Light pollution glow' })
   await page.getByRole('switch', { name: 'Red mode' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-red', 'true')
-  await expect(page).toHaveURL(/glow=0/)
+  await expect(glowBtn).toBeDisabled()
+  await expect(glowBtn).toHaveAttribute('aria-pressed', 'false')
+  await expect(glowBtn).toHaveAccessibleDescription('Glow is off in red mode')
+  await expect(page).not.toHaveURL(/glow=0/)
   await settle(page)
   expect(await nonRedColors(page)).toEqual([])
+  // Colour emoji (the Canada flag) cannot take a token colour; red mode tints them with a CSS filter.
+  const flag = page.locator('.emoji').first()
+  await expect(flag).toBeVisible()
+  expect(await flag.evaluate((el) => getComputedStyle(el).filter)).toMatch(/sepia/)
   await page.screenshot({ path: testInfo.outputPath('main-red-full.png'), fullPage: true })
   await expect(page).toHaveScreenshot('main-red.png', { mask: mapMask(page) })
 
@@ -196,16 +204,19 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
   expect(await shadowedElements(page)).toEqual([])
 
+  // Leaving red mode brings the user's glow setting back (it was never changed in the URL).
+  await page.getByRole('switch', { name: 'Red mode' }).click()
+  await expect(page.locator('html')).not.toHaveAttribute('data-red', 'true')
+  await expect(glowBtn).toBeEnabled()
+  await expect(glowBtn).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.emoji').first()).toHaveCSS('filter', 'none')
+
   // Selecting a card flies the map to it at z11, where the fixture basemap has tiles
-  // (see fixtures/tiles-region-se_mi.geojson), so the PMTiles archives are read with Range requests.
-  // The first expansion above already flew there; MapLibre keeps tiles across the restyle, so this
-  // checks the whole session rather than only requests after this click. Red mode turned the glow
-  // off, so turn it back on to read the light-pollution raster at z11 too.
+  // (see fixtures/tiles-region-se_mi.geojson), so the PMTiles archives are read with Range requests,
+  // including the light-pollution raster now that glow is showing again. The first expansion above
+  // already flew there; MapLibre keeps tiles across restyles, so this checks the whole session.
   await cards.first().getByRole('button', { expanded: false }).click()
   await expect(page).toHaveURL(/spot=/)
-  await page.getByRole('button', { name: 'Light pollution glow' }).click()
-  await expect(page.getByRole('button', { name: 'Light pollution glow' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page).not.toHaveURL(/glow=0/)
   for (const file of ['basemap_se_mi_base', 'basemap_se_mi_transportation', 'basemap_se_mi_divisions', 'lightpollution_se_mi']) {
     await expect
       .poll(() => tiles.filter((t) => t.url.includes(`/se_mi/${file}.pmtiles`) && t.status === 206).length)
@@ -213,6 +224,11 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   }
   await page.waitForLoadState('networkidle')
   expect(tiles.filter((t) => t.status !== 200 && t.status !== 206)).toEqual([])
+
+  // Back in red mode the expanded card and map chrome stay red-only, and glow is forced off again.
+  await page.getByRole('switch', { name: 'Red mode' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-red', 'true')
+  await expect(glowBtn).toBeDisabled()
   expect(await nonRedColors(page)).toEqual([])
   expect(errors).toEqual([])
 })

@@ -1,6 +1,10 @@
 import type { TimelineHour, Window } from '../api/types'
 import { fmtTime } from './time'
 
+// U+FE0E asks for text presentation, so the glyphs take the token colour instead of drawing as colour emoji.
+const CLOUD = '☁︎'
+const MOON = '☾︎'
+
 interface Props {
   timeline: TimelineHour[]
   bestWindow: Window | null
@@ -35,9 +39,9 @@ export function NightScrubber({ timeline, bestWindow, timezone }: Props) {
               <span className="scrubber-fill" style={{ height: `${q}%` }} />
             </span>
             <span className="scrubber-icons" aria-hidden="true">
-              {h.cloud !== null && <span>{`☁${Math.round(h.cloud)}`}</span>}
+              {h.cloud !== null && <span>{`${CLOUD}${Math.round(h.cloud)}`}</span>}
               {h.fog && <span>fog</span>}
-              {h.moon_up && <span>☾</span>}
+              {h.moon_up && <span>{MOON}</span>}
             </span>
             <span className="scrubber-time" aria-hidden="true">
               {time}

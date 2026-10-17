@@ -67,3 +67,9 @@ test('red.css remaps every token and stays black or within 10deg of red', () => 
     expect(dist, `${k}: ${v} hue ${h}`).toBeLessThanOrEqual(10)
   }
 })
+
+test('red mode tints emoji with a CSS filter', () => {
+  const css = readFileSync(resolve(process.cwd(), 'src/theme/red.css'), 'utf8')
+  const rule = css.match(/html\[data-red="true"\]\s+\.emoji\s*\{([^}]*)\}/)
+  expect(rule?.[1]).toMatch(/filter:\s*[^;]*sepia/)
+})

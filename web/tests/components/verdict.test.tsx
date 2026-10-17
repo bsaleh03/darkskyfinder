@@ -72,6 +72,21 @@ describe('VerdictCard', () => {
     expect(screen.getByText('18% moon, sets 7:26 PM')).toBeTruthy()
   })
 
+  it('moon line shows rise and set in the order they happen during the night', () => {
+    const moon = (rise: string | null, set: string | null, illumination = 0.62) => verdict({ moon: { illumination, rise, set } })
+    const { unmount } = card(moon('2026-10-18T01:40-04:00', null))
+    expect(screen.getByText('62% moon, rises 1:40 AM')).toBeTruthy()
+    unmount()
+    const second = card(moon(null, '2026-10-17T22:26-04:00', 0.18))
+    expect(screen.getByText('18% moon, sets 10:26 PM')).toBeTruthy()
+    second.unmount()
+    const third = card(moon('2026-10-18T04:05-04:00', '2026-10-17T22:26-04:00', 0.18))
+    expect(screen.getByText('18% moon, sets 10:26 PM, rises 4:05 AM')).toBeTruthy()
+    third.unmount()
+    card(moon('2026-10-17T21:10-04:00', '2026-10-18T05:02-04:00'))
+    expect(screen.getByText('62% moon, rises 9:10 PM, sets 5:02 AM')).toBeTruthy()
+  })
+
   it('shows notes for unavailable forecast and approx drive', () => {
     card(verdict(), { forecastStatus: 'unavailable', driveStatus: 'approx' })
     expect(screen.getByText('Cloud forecast unavailable')).toBeTruthy()

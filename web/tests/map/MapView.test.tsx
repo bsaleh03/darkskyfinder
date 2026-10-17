@@ -260,3 +260,18 @@ test('glow button calls back', async () => {
   await userEvent.click(screen.getByRole('button', { name: /glow/i }))
   expect(base.onToggleGlow).toHaveBeenCalled()
 })
+
+test('red mode forces glow off: button disabled with an explanation, raster hidden', () => {
+  const { rerender } = render(<MapView {...base} red />)
+  const btn = screen.getByRole('button', { name: /glow/i })
+  expect(btn).toBeDisabled()
+  expect(btn).toHaveAttribute('aria-pressed', 'false')
+  expect(btn).toHaveAccessibleDescription('Glow is off in red mode')
+  expect(btn).toHaveAttribute('title', 'Glow is off in red mode')
+  const style = vi.mocked(maplibregl.Map).mock.calls[0][0].style as { layers: { id: string; layout?: { visibility?: string } }[] }
+  expect(style.layers.find((l) => l.id === 'glow-se_mi')?.layout?.visibility).toBe('none')
+  rerender(<MapView {...base} />)
+  expect(screen.getByRole('button', { name: /glow/i })).toBeEnabled()
+  expect(screen.getByRole('button', { name: /glow/i })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: /glow/i })).not.toHaveAttribute('title')
+})

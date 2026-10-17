@@ -35,6 +35,11 @@
   border-color: var(--amber);
 }
 
+.map-glow-btn:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .map-toast {
   bottom: 24px;
   left: 50%;

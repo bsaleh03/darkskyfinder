@@ -1,7 +1,7 @@
 import maplibregl, { type Map as MlMap, type Marker } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { Protocol } from 'pmtiles'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { Region, Spot } from '../api/types'
 import { config } from '../config'
 import { toRed } from './color'
@@ -27,6 +27,7 @@ const SRC = 'spots'
 const PIN_LAYERS = ['spots-ring', 'spots-pin']
 const AMBER = '#F5C96B'
 const VIOLET = '#A58BE0'
+const GLOW_RED_NOTE = 'Glow is off in red mode'
 
 let protocolRegistered = false
 function registerPmtiles() {
@@ -70,7 +71,10 @@ function addPins(map: MlMap, data: GeoJSON.FeatureCollection, red: boolean) {
 }
 
 export function MapView(props: MapViewProps) {
-  const { spots, start, selectedId, glow, red, regions, focusRegion } = props
+  const { spots, start, selectedId, red, regions, focusRegion } = props
+  // Red mode never shows the glow raster; the user's glow setting comes back when red mode ends.
+  const glow = props.glow && !red
+  const glowNoteId = useId()
   const box = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MlMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
@@ -100,7 +104,7 @@ export function MapView(props: MapViewProps) {
     map.on('style.load', () => {
       const p = latest.current
       addPins(map, spotsToGeoJSON(p.spots, p.selectedId), p.red)
-      applyGlow(map, p.glow)
+      applyGlow(map, p.glow && !p.red)
     })
     map.on('click', (e) => {
       const target = e.originalEvent?.target
@@ -201,9 +205,22 @@ export function MapView(props: MapViewProps) {
   return (
     <div className="map-view">
       <div ref={box} className="map-canvas" data-testid="map" />
-      <button type="button" className="map-glow-btn" aria-pressed={glow} onClick={props.onToggleGlow}>
+      <button
+        type="button"
+        className="map-glow-btn"
+        aria-pressed={glow}
+        disabled={red}
+        aria-describedby={red ? glowNoteId : undefined}
+        title={red ? GLOW_RED_NOTE : undefined}
+        onClick={props.onToggleGlow}
+      >
         Light pollution glow
       </button>
+      {red && (
+        <span id={glowNoteId} className="sr-only">
+          {GLOW_RED_NOTE}
+        </span>
+      )}
       {pending && (
         <div className="map-toast" role="alertdialog" aria-label="Confirm start location">
           <span>Set start here?</span>

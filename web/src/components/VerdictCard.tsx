@@ -9,10 +9,27 @@ interface Props {
   timezone: string
 }
 
+/** "62% moon, sets 10:26 PM, rises 4:05 AM": the moon events within the dark window, in time order. */
+export function moonLine(verdict: Verdict, timezone: string): string {
+  const { moon, dark } = verdict
+  const from = new Date(dark.start).getTime()
+  const to = new Date(dark.end).getTime()
+  const events = (
+    [
+      ['rises', moon.rise],
+      ['sets', moon.set],
+    ] as const
+  )
+    .filter((e): e is readonly ['rises' | 'sets', string] => e[1] !== null)
+    .map(([verb, iso]) => ({ verb, iso, t: new Date(iso).getTime() }))
+    .filter((e) => e.t >= from && e.t <= to)
+    .sort((a, b) => a.t - b.t)
+  return [`${Math.round(moon.illumination * 100)}% moon`, ...events.map((e) => `${e.verb} ${fmt(e.iso, timezone)}`)].join(', ')
+}
+
 export function VerdictCard({ verdict, forecastStatus, driveStatus, timezone }: Props) {
-  const { rating, sentence, best_window: win, moon, dark } = verdict
-  const pct = `${Math.round(moon.illumination * 100)}% moon`
-  const moonText = moon.set ? `${pct}, sets ${fmt(moon.set, timezone)}` : pct
+  const { rating, sentence, best_window: win, dark } = verdict
+  const moonText = moonLine(verdict, timezone)
   return (
     <section className={`verdict verdict--${rating}`} aria-label="Night verdict">
       <p className="verdict-sentence">{sentence}</p>
