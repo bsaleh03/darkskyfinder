@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App'
+import { resetWarmupForTests } from '../src/api/queries'
 import * as client from '../src/api/client'
 import { ApiError } from '../src/api/client'
 import type { Region, Spot, SpotsResponse } from '../src/api/types'
@@ -106,6 +107,7 @@ async function advance(ms: number) {
 }
 
 beforeEach(() => {
+  resetWarmupForTests()
   mapProps.current = null
   fetchSpots.mockReset()
   fetchRegions.mockReset().mockResolvedValue(REGIONS)
@@ -143,6 +145,8 @@ describe('App flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'mock drop pin' }))
     expect(new URLSearchParams(window.location.search).get('lat')).toBe('42.3')
     expect(await screen.findByRole('button', { name: 'Dropped pin' })).toBeInTheDocument()
+    // Focus moves to the results heading.
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: /Dark skies near Dropped pin/ }))
   })
 
   it('results render verdict and cards', async () => {
@@ -196,7 +200,8 @@ describe('App flow', () => {
     fireEvent.click(within(chips).getByRole('button', { name: 'SF Bay Area' }))
     expect(window.location.search).not.toContain('lat=')
     expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'bay_area')
-    expect(screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })).toBeInTheDocument()
+    const h1 = screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })
+    expect(document.activeElement).toBe(h1) // focus returns to the Welcome headline
   })
 
   it('night_out_of_range resets to tonight', async () => {
@@ -231,7 +236,7 @@ describe('App flow', () => {
     fetchSpots.mockResolvedValue(response([]))
     render(<App />)
     expect(await screen.findByText('Nothing within 180 min.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Widen to/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Already at max distance' })).toBeDisabled()
   })
 
   it('429 shows rate-limit copy', async () => {
@@ -286,5 +291,79 @@ describe('App flow', () => {
     act(() => mapProps.current!.onToggleGlow())
     expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'true')
     expect(new URLSearchParams(window.location.search).get('glow')).toBeNull()
+  })
+
+  it('drive slider drag adds at most one history entry', async () => {
+    go(START)
+    fetchSpots.mockResolvedValue(response())
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    const before = window.history.length
+    const slider = screen.getByRole('slider')
+    for (const v of ['105', '120', '135', '150']) fireEvent.change(slider, { target: { value: v } })
+    fireEvent.pointerUp(slider)
+    expect(new URLSearchParams(window.location.search).get('drive')).toBe('150')
+    expect(window.history.length).toBe(before + 1)
+  })
+
+  it('full map is cleared when the viewport becomes desktop', async () => {
+    const listeners: ((e: { matches: boolean }) => void)[] = []
+    const mql = {
+      matches: false,
+      media: '(min-width: 900px)',
+      addEventListener: (_: string, l: (e: { matches: boolean }) => void) => listeners.push(l),
+      removeEventListener: vi.fn(),
+    }
+    const orig = window.matchMedia
+    window.matchMedia = vi.fn().mockImplementation((q: string) =>
+      q === '(min-width: 900px)' ? mql : { matches: false, media: q, addEventListener: vi.fn(), removeEventListener: vi.fn() },
+    ) as unknown as typeof window.matchMedia
+    try {
+      go(START)
+      fetchSpots.mockResolvedValue(response())
+      const { container } = render(<App />)
+      await screen.findByText('Great night for stars.')
+      fireEvent.click(screen.getByRole('button', { name: 'Full map' }))
+      expect(container.querySelector('.app--map-full')).not.toBeNull()
+      act(() => listeners.forEach((l) => l({ matches: true })))
+      expect(container.querySelector('.app--map-full')).toBeNull()
+    } finally {
+      window.matchMedia = orig
+    }
+  })
+
+  it('welcome locate outside coverage shows coverage message and stays on welcome', async () => {
+    const geo = {
+      getCurrentPosition: (ok: (p: { coords: { latitude: number; longitude: number } }) => void) =>
+        ok({ coords: { latitude: 40.7, longitude: -74 } }),
+    }
+    Object.defineProperty(navigator, 'geolocation', { value: geo, configurable: true })
+    try {
+      render(<App />)
+      await screen.findByRole('button', { name: 'SE Michigan' })
+      fireEvent.click(screen.getByRole('button', { name: 'Use my location' }))
+      expect(screen.getByText('We cover SE Michigan and the SF Bay Area so far.')).toBeInTheDocument()
+      expect(window.location.search).not.toContain('lat=')
+      expect(screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })).toBeInTheDocument()
+      expect(within(screen.getByRole('group', { name: 'Regions' })).getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()
+      expect(fetchSpots).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(navigator, 'geolocation', { value: undefined, configurable: true })
+    }
+  })
+
+  it('changing a filter keeps the previous results visible while refetching', async () => {
+    go(START)
+    let resolve!: (r: SpotsResponse) => void
+    fetchSpots.mockImplementation((p) =>
+      p.limit === 25 && p.sort === 'closest' ? new Promise((r) => (resolve = r)) : Promise.resolve(response()),
+    )
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    fireEvent.click(screen.getByRole('radio', { name: 'Closest' }))
+    expect(screen.getByText('Lake Park Beach')).toBeInTheDocument()
+    expect(screen.getByText('Great night for stars.')).toBeInTheDocument()
+    await act(async () => resolve(response([spot({ id: 's9', display_name: 'Far Field' })])))
+    expect(await screen.findByText('Far Field')).toBeInTheDocument()
   })
 })

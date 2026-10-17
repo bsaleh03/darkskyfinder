@@ -29,7 +29,17 @@ describe('Controls', () => {
     fireEvent.change(slider, { target: { value: '120' } })
     expect(onChange).toHaveBeenLastCalledWith({ drive: 120 })
     fireEvent.change(slider, { target: { value: '137' } })
-    expect(onChange).toHaveBeenLastCalledWith({ drive: 135 })
+    expect(onChange).toHaveBeenLastCalledWith({ drive: 135 }, { replace: true })
+  })
+
+  it('slider pushes once per gesture, then replaces', () => {
+    const onChange = setup()
+    const slider = screen.getByRole('slider')
+    fireEvent.change(slider, { target: { value: '105' } })
+    fireEvent.change(slider, { target: { value: '120' } })
+    fireEvent.pointerUp(slider)
+    fireEvent.change(slider, { target: { value: '135' } })
+    expect(onChange.mock.calls).toEqual([[{ drive: 105 }], [{ drive: 120 }, { replace: true }], [{ drive: 135 }]])
   })
 
   it('sort and access emit patches', async () => {
@@ -117,6 +127,7 @@ describe('Controls', () => {
     const slider = screen.getByRole('slider')
     fireEvent.change(slider, { target: { value: '20' } })
     expect(onChange).toHaveBeenLastCalledWith({ drive: 30 })
+    fireEvent.pointerUp(slider) // separate gesture: pushes again
     fireEvent.change(slider, { target: { value: '200' } })
     expect(onChange).toHaveBeenLastCalledWith({ drive: 180 })
   })

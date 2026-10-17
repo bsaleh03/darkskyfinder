@@ -40,6 +40,11 @@
   position: relative;
 }
 
+.app-list--stale > :not(.controls) {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
 .app--results .app-map {
   height: 200px;
   margin: 0 16px;
@@ -117,5 +122,18 @@
 
   .app-map-expand {
     display: none;
+  }
+
+  /* Full-screen map is mobile-only; undo it if the viewport grows past 900px. */
+  .app--map-full .app-map {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-list--stale > :not(.controls) {
+    transition: none;
   }
 }

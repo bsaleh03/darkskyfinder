@@ -1,5 +1,6 @@
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ApiError, errorMessage } from './api/client'
 import { makeQueryClient, useNightDots, useRegions, useSpots, useWarmup } from './api/queries'
 import type { Region, SearchHit } from './api/types'
 import { Controls } from './components/Controls'
@@ -19,6 +20,8 @@ import './AppLayout.css'
 type LatLon = { lat: number; lon: number }
 
 const MAX_DRIVE = 180
+const DESKTOP = '(min-width: 900px)'
+const COVERAGE = errorMessage(new ApiError('out_of_coverage'))
 
 export function regionFor(regions: Region[], p: LatLon): Region | undefined {
   return regions.find((r) => {
@@ -52,7 +55,6 @@ export default function App({ client }: { client?: QueryClient }) {
 
 function Main() {
   useWarmup()
-  const qc = useQueryClient()
   const [state, update] = useAppState()
   const [red] = useRedMode()
   const regions = useRegions()
@@ -75,9 +77,9 @@ function Main() {
   const startLabel = start ? (startName ?? 'Dropped pin') : null
 
   useEffect(() => {
-    if (!data || state.night !== null) return
+    if (!data || spots.stale || state.night !== null) return
     setTonight((t) => (t[data.metro] === data.night ? t : { ...t, [data.metro]: data.night }))
-  }, [data, state.night])
+  }, [data, spots.stale, state.night])
 
   const today = (metro && tonight[metro]) || (timezone ? calendarDate(timezone) : null)
   const nights = useMemo(() => (today ? nextNights(today) : []), [today])
@@ -95,6 +97,28 @@ function Main() {
     if (red && !prevRed.current) update({ glow: false }, { replace: true })
     prevRed.current = red
   }, [red, update])
+
+  // The full-screen map is a mobile mode: leave it when the viewport becomes desktop.
+  useEffect(() => {
+    const mql = window.matchMedia?.(DESKTOP)
+    if (!mql) return
+    const onChange = (e: { matches: boolean }) => {
+      if (e.matches) setMapFull(false)
+    }
+    mql.addEventListener?.('change', onChange)
+    return () => mql.removeEventListener?.('change', onChange)
+  }, [])
+
+  // Move focus with the screen: results heading on entering results, Welcome headline on leaving.
+  const resultsHeading = useRef<HTMLHeadingElement>(null)
+  const welcomeHeading = useRef<HTMLHeadingElement>(null)
+  const hasStart = start !== null
+  const prevHasStart = useRef(hasStart)
+  useEffect(() => {
+    if (prevHasStart.current === hasStart) return
+    prevHasStart.current = hasStart
+    ;(hasStart ? resultsHeading : welcomeHeading).current?.focus()
+  }, [hasStart])
 
   function setStart(p: LatLon, label: string | null) {
     const at = { lat: p.lat, lon: p.lon }
@@ -114,7 +138,12 @@ function Main() {
     setStart(hit, hit.name)
   }
   const onLocate = (p: LatLon) => {
-    setFocus(regionFor(regions, p)?.key ?? null)
+    const r = regionFor(regions, p)
+    if (regions.length > 0 && !r) {
+      setNotice(COVERAGE)
+      return
+    }
+    setFocus(r?.key ?? null)
     setStart(p, null)
   }
   const onRegion = (key: string) => {
@@ -136,7 +165,7 @@ function Main() {
         error={error}
         regions={regions}
         onRegion={onRegion}
-        onRetry={() => void qc.refetchQueries({ queryKey: ['spots'] })}
+        onRetry={spots.refetch}
       />
     )
   } else if (spots.waking) {
@@ -158,12 +187,16 @@ function Main() {
     )
   }
 
+  const busy = spots.stale
   const appClass = `app ${start ? 'app--results' : 'app--welcome'}${start && mapFull ? ' app--map-full' : ''}`
   return (
     <div className={appClass}>
       {start ? (
         <div className="app-top">
           <p className="app-name">Dark Sky Finder</p>
+          <h1 className="sr-only" tabIndex={-1} ref={resultsHeading}>
+            {`Dark skies near ${startLabel}`}
+          </h1>
           <TopBar
             startLabel={startLabel}
             regions={regions}
@@ -197,6 +230,7 @@ function Main() {
         </div>
       ) : (
         <Welcome
+          headingRef={welcomeHeading}
           regions={regions}
           focusRegion={focus}
           notice={notice}
@@ -234,9 +268,9 @@ function Main() {
         )}
       </div>
       {start && (
-        <main className="app-list">
+        <main className={`app-list${busy ? ' app-list--stale' : ''}`} aria-busy={busy}>
           {error?.kind !== 'out_of_coverage' && (
-            <Controls state={state} metro={metro} showVerified={showVerified} onChange={(patch) => update(patch)} />
+            <Controls state={state} metro={metro} showVerified={showVerified} onChange={(patch, opts) => update(patch, opts)} />
           )}
           {body}
         </main>

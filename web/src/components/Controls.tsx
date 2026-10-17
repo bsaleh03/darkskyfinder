@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from 'react'
+import { type KeyboardEvent, type ReactNode, useRef } from 'react'
 import type { AccessKey, SortKey } from '../api/types'
 import type { AppState } from '../state/useAppState'
 import './controls.css'
@@ -8,7 +8,8 @@ interface Props {
   state: AppState
   metro: string | null
   showVerified: boolean
-  onChange: (patch: Partial<AppState>) => void
+  /** `replace` is set for slider moves after the first in one drag, so history gets one entry per gesture. */
+  onChange: (patch: Partial<AppState>, opts?: { replace: true }) => void
 }
 
 const MIN = 30
@@ -69,6 +70,10 @@ const SORTS: { value: SortKey; label: string }[] = [
 ]
 
 export function Controls({ state, metro, showVerified, onChange }: Props) {
+  const dragging = useRef(false)
+  const endGesture = () => {
+    dragging.current = false
+  }
   const accessOptions: { value: AccessKey; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'likely', label: 'Likely open' },
@@ -85,7 +90,15 @@ export function Controls({ state, metro, showVerified, onChange }: Props) {
           max={MAX}
           step={STEP}
           value={state.drive}
-          onChange={(e) => onChange({ drive: snap(Number(e.target.value)) })}
+          onChange={(e) => {
+            const patch = { drive: snap(Number(e.target.value)) }
+            if (dragging.current) onChange(patch, { replace: true })
+            else onChange(patch)
+            dragging.current = true
+          }}
+          onPointerUp={endGesture}
+          onKeyUp={endGesture}
+          onBlur={endGesture}
         />
       </label>
       <Segmented label="Sort by" value={state.sort} options={SORTS} onSelect={(sort) => onChange({ sort })} />

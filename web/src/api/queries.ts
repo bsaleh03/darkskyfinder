@@ -47,6 +47,10 @@ function useSpotsQuery(s: AppState) {
     queryKey: ['spots', s.start, s.night, s.drive, s.sort, s.access, s.border],
     queryFn: ({ signal }) => fetchSpots(spotsParams(s), signal),
     enabled: s.start !== null,
+    // Keep the previous result on screen while filters change, but never carry
+    // one start's spots over to a different start.
+    placeholderData: (prev, prevQuery) =>
+      prevQuery && JSON.stringify(prevQuery.queryKey[1]) === JSON.stringify(s.start) ? prev : undefined,
     retry: (failureCount, err) => isRetryable(err) && failureCount < RETRY_DELAYS_MS.length,
     // failureCount is 0-based: delay before the first retry is index 0
     retryDelay: (failureCount) => RETRY_DELAYS_MS[Math.min(failureCount, RETRY_DELAYS_MS.length - 1)],
@@ -58,6 +62,9 @@ export function useSpots(s: AppState): {
   error?: ApiError
   isLoading: boolean
   waking: boolean
+  /** `data` belongs to the previous params while the new ones load. */
+  stale: boolean
+  refetch: () => void
 } {
   const q = useSpotsQuery(s)
   const loading = q.isLoading
@@ -76,6 +83,8 @@ export function useSpots(s: AppState): {
     error: q.error ?? undefined,
     isLoading: loading,
     waking: (loading && slow) || retrying,
+    stale: q.isPlaceholderData,
+    refetch: () => void q.refetch(),
   }
 }
 
@@ -114,7 +123,8 @@ function release() {
 }
 
 export function useNightDots(s: AppState, nights: string[]): Record<string, Dot | undefined> {
-  const ready = useSpotsQuery(s).isSuccess
+  const main = useSpotsQuery(s)
+  const ready = main.isSuccess && !main.isPlaceholderData
   const results = useQueries({
     queries: nights.map((night) => ({
       queryKey: ['dot', s.start, night, s.drive, s.sort, s.access, s.border],

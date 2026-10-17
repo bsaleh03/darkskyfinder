@@ -10,11 +10,12 @@ interface Props {
 
 export function EmptyState({ drive, onWiden }: Props) {
   const next = Math.min(MAX_DRIVE, drive + 30)
+  const atMax = drive >= MAX_DRIVE
   return (
     <div className="state-panel">
       <p className="state-title">{`Nothing within ${drive} min.`}</p>
-      <button type="button" className="ctl-btn state-action" disabled={drive >= MAX_DRIVE} onClick={() => onWiden(next)}>
-        {`Widen to ${next} min`}
+      <button type="button" className="ctl-btn state-action" disabled={atMax} onClick={() => onWiden(next)}>
+        {atMax ? 'Already at max distance' : `Widen to ${next} min`}
       </button>
     </div>
   )
