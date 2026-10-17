@@ -23,9 +23,14 @@ export function NightScrubber({ timeline, bestWindow, timezone }: Props) {
           .join(' ')
         const q = Math.round(Math.min(1, Math.max(0, h.quality)) * 100)
         const time = fmtTime(h.time, timezone)
-        const cloud = h.cloud === null ? 'cloud cover unknown' : `${Math.round(h.cloud)}% cloud`
+        const word = q >= 66 ? 'good' : q >= 33 ? 'fair' : 'poor'
+        const extras = [
+          h.cloud === null ? 'cloud unknown' : `cloud ${Math.round(h.cloud)}%`,
+          h.fog ? 'fog' : null,
+          h.moon_up ? 'moon up' : null,
+        ].filter(Boolean)
         return (
-          <li key={h.time} className={cls} aria-label={`${time}: quality ${q}%, ${cloud}`}>
+          <li key={h.time} className={cls} aria-label={`${time}, ${word}, ${extras.join(', ')}`}>
             <span className="scrubber-bar">
               <span className="scrubber-fill" style={{ height: `${q}%` }} />
             </span>

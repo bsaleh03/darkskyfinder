@@ -4,6 +4,8 @@ import type { Spot } from '../../src/api/types'
 import { SpotCard } from '../../src/components/SpotCard'
 import { starCount } from '../../src/components/SkyPreview'
 import { directionsUrl } from '../../src/components/DirectionsButton'
+import { darknessLabel, DarknessScale } from '../../src/components/DarknessScale'
+import { NightScrubber } from '../../src/components/NightScrubber'
 
 const hour = (h: number, past: boolean) => ({
   time: `2026-10-17T${String(h).padStart(2, '0')}:00:00-04:00`,
@@ -95,7 +97,9 @@ describe('SpotCard', () => {
     expect(hours).toHaveLength(3)
     expect(hours[0].classList.contains('past')).toBe(true)
     expect(hours[1].classList.contains('past')).toBe(false)
-    expect(container.querySelector('.scrubber-hour--best')).not.toBeNull()
+    expect(hours[0].classList.contains('scrubber-hour--best')).toBe(false)
+    expect(hours[1].classList.contains('scrubber-hour--best')).toBe(true)
+    expect(hours[2].classList.contains('scrubber-hour--best')).toBe(false)
     expect(screen.getByRole('button', { expanded: true })).toBeTruthy()
     expect(screen.getByText('Milky Way casts shadows')).toBeTruthy()
   })
@@ -149,6 +153,62 @@ describe('helpers', () => {
     const g = 'https://www.google.com/maps/dir/?api=1&destination=42.5,-83.5'
     expect(directionsUrl(42.5, -83.5, android)).toBe(g)
     expect(directionsUrl(42.5, -83.5, desktop)).toBe(g)
-    void fireEvent
+    const ipad = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15'
+    expect(directionsUrl(42.5, -83.5, ipad, 5)).toBe('https://maps.apple.com/?daddr=42.5,-83.5')
+    expect(directionsUrl(42.5, -83.5, ipad)).toBe(g)
+    expect(directionsUrl(42.5, -83.5, ipad, 0)).toBe(g)
+  })
+})
+
+describe('fix round 1', () => {
+  it('darknessLabel cutoffs', () => {
+    expect(darknessLabel(21.7)).toBe('Milky Way casts shadows')
+    expect(darknessLabel(21.69)).toBe('Milky Way')
+    expect(darknessLabel(20.4)).toBe('Milky Way')
+    expect(darknessLabel(20.39)).toBe('A few stars')
+    expect(darknessLabel(18.4)).toBe('A few stars')
+    expect(darknessLabel(18.39)).toBe('City')
+  })
+
+  it('darkness scale accessible name carries both values', () => {
+    const { rerender } = render(<DarknessScale homeSqm={19} spotSqm={21} />)
+    expect(screen.getByRole('img', { name: 'Home: A few stars; this spot: Milky Way' })).toBeTruthy()
+    rerender(<DarknessScale homeSqm={null} spotSqm={21} />)
+    expect(screen.getByRole('img', { name: 'This spot: Milky Way' })).toBeTruthy()
+  })
+
+  it('clicking header calls onToggle', () => {
+    let n = 0
+    show(spot(), { onToggle: () => void n++ })
+    fireEvent.click(screen.getByRole('button'))
+    expect(n).toBe(1)
+  })
+
+  it('scrubber aria-label includes fog and moon', () => {
+    render(
+      <NightScrubber
+        timeline={[{ ...hour(21, false), fog: true, moon_up: true }]}
+        bestWindow={null}
+        timezone="America/Detroit"
+      />,
+    )
+    expect(screen.getByLabelText('9:00 PM, good, cloud 10%, fog, moon up')).toBeTruthy()
+  })
+
+  it('unavailable without reason and non-finite numbers stay clean', () => {
+    const bad = spot({
+      unavailable: true,
+      unavailable_reason: null,
+      sqm: NaN,
+      bortle: NaN,
+      radiance: NaN,
+      drive_minutes: 30,
+      amenities: { restroom: { name: 'WC', km: NaN }, fuel: null, food: null },
+      timeline: [{ ...hour(21, false), cloud: null }],
+    })
+    const { container } = show(bad, { expanded: true })
+    const text = container.textContent ?? ''
+    expect(text).not.toMatch(/null|undefined|NaN/)
+    expect(screen.getByText('Not available right now')).toBeTruthy()
   })
 })
