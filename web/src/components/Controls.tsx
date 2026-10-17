@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import type { AccessKey, SortKey } from '../api/types'
 import type { AppState } from '../state/useAppState'
 import './controls.css'
@@ -28,9 +28,22 @@ interface SegProps<T extends string> {
 }
 
 function Segmented<T extends string>({ label, value, options, onSelect }: SegProps<T>): ReactNode {
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const n = options.length
+    let next: number
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % n
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + n) % n
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = n - 1
+    else return
+    e.preventDefault()
+    onSelect(options[next].value)
+    const buttons = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+    buttons?.[next]?.focus()
+  }
   return (
     <div className="seg" role="radiogroup" aria-label={label}>
-      {options.map((o) => (
+      {options.map((o, i) => (
         <button
           key={o.value}
           type="button"
@@ -39,6 +52,7 @@ function Segmented<T extends string>({ label, value, options, onSelect }: SegPro
           tabIndex={value === o.value ? 0 : -1}
           className="ctl-btn seg-btn"
           onClick={() => onSelect(o.value)}
+          onKeyDown={(e) => onKeyDown(e, i)}
         >
           {o.label}
         </button>
