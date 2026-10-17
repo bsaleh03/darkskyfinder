@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: darksky-api
+    runtime: python
+    plan: free
+    rootDir: api
+    buildCommand: pip install .
+    startCommand: uvicorn darksky_api.app:build_default_app --factory --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: ORS_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false # the static site URL, e.g. https://darksky-web.onrender.com
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+  - type: web
+    name: darksky-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false # https://darksky-api.onrender.com
+      - key: VITE_TILES_URL
+        sync: false # R2 public r2.dev URL, no trailing slash
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache

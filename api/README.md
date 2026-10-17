@@ -2,6 +2,8 @@
 
 FastAPI service: night verdict + ranked stargazing spots for a start point, start-point search, regions.
 
+Deployment (Render Blueprint, tiles on R2) is covered in the [root README](../README.md#deploy).
+
 ## Setup
 ```bash
 python -m venv .venv
