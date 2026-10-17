@@ -172,6 +172,8 @@ def test_area_and_display_name(built):
     summary, spots, _ = built
     assert spots["pl_city"]["area"] == "Testville"
     assert spots["pl_hudson"]["area"] is None and spots["pl_camp"]["area"] is None
+    assert spots["pl_city"]["country"] == "US"
+    assert spots["pl_hudson"]["country"] is None
     for s in spots.values():
         assert s["display_name"] == s["name"]
     assert summary.merged_duplicates == 0

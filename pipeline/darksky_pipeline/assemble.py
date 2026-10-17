@@ -14,7 +14,7 @@ from .roads import ViewingPoint
 from .spots import Candidate
 from .util import atomic_path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def access_badge(category: str, curated: CuratedEntry | None) -> str:
@@ -25,7 +25,8 @@ def access_badge(category: str, curated: CuratedEntry | None) -> str:
     return "check_hours"
 
 
-def why_chips(horizon: Horizon, glare: Glare, paved: bool, dark_sky_place: bool) -> list[str]:
+def why_chips(horizon: Horizon, glare: Glare, paved: bool, dark_sky_place: bool,
+              recommended: bool = False) -> list[str]:
     chips: list[str] = []
     if horizon.cls == "open":
         chips.append("Open lake horizon" if horizon.water_frac >= config.LAKE_CHIP_MIN_WATER else "Open horizon")
@@ -35,6 +36,8 @@ def why_chips(horizon: Horizon, glare: Glare, paved: bool, dark_sky_place: bool)
         chips.append("Paved access")
     if dark_sky_place:
         chips.append("Dark Sky Place")
+    if recommended:
+        chips.append("Recommended")
     return chips
 
 
@@ -64,10 +67,12 @@ def assemble_spot(c: Candidate, vp: ViewingPoint, glare: Glare, horizon: Horizon
                    "paved": vp.paved, "parking": vp.parking,
                    "note": curated.access_note if curated else None},
         "dark_sky_place": dark_sky,
+        "recommended": bool(curated and curated.recommended),
+        "sources": [dict(x) for x in curated.sources] if curated else [],
         "unavailable": bool(curated and curated.unavailable),
         "unavailable_reason": curated.unavailable_reason if curated and curated.unavailable else None,
         "amenities": {k: _amenity(v) for k, v in amenities.items()},
-        "why": why_chips(horizon, glare, vp.paved, dark_sky),
+        "why": why_chips(horizon, glare, vp.paved, dark_sky, bool(curated and curated.recommended)),
     }
 
 

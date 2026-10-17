@@ -67,3 +67,9 @@ def test_display_name_collision_same_or_null_area_falls_back():
     d = {s["id"]: s["display_name"] for s in spots}
     assert d["a"] == d["b"] == "Lake Park"
     assert d["c"] == "Foo" and d["d"] == "Foo \u00b7 Y"
+
+
+def test_recommended_beats_darker_uncurated():
+    rec = {**sp("a", sqm=19.0), "recommended": True}
+    out, n = merge_duplicates([rec, sp("b", km=0.5, sqm=21.5)])
+    assert ids(out) == ["a"] and n == 1

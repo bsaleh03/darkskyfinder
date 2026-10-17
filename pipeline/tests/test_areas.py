@@ -48,3 +48,15 @@ def test_smallest_within_rank_and_null_names_skipped():
                          row("2", "Small", "locality", (0, 0, 2, 2)),
                          row("3", None, "locality", (0, 0, 1, 1))))
     assert f.area_for(0.5, 0.5) == "Small"
+
+
+def test_country_of_matched_area():
+    f = AreaFinder(frame(("1", "Town", "locality", "US", "US-MI", sq(0, 0, 1, 1)),
+                         ("2", "Ville", "locality", "CA", "CA-ON", sq(5, 5, 6, 6)),
+                         ("3", "Anon County", "county", "CA", "CA-ON", sq(7, 7, 9, 9))))
+    assert f.lookup(0.5, 0.5) == ("Town", "US")
+    assert f.lookup(5.5, 5.5) == ("Ville", "CA")
+    assert f.lookup(8, 8) == ("Anon County", "CA")
+    assert f.lookup(50, 50) == (None, None)
+    assert f.country_for(5.5, 5.5) == "CA" and f.country_for(50, 50) is None
+    assert AreaFinder(frame()).lookup(0, 0) == (None, None)

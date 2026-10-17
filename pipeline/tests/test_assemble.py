@@ -60,7 +60,7 @@ def test_document_sorted_and_written(tmp_path):
     b = {**a, "id": "pl_a"}
     doc = build_spots_document("se_mi", "R1", [a, b], generated_at="2026-10-15T00:00:00Z")
     assert [s["id"] for s in doc["spots"]] == ["pl_a", "pl_x"]
-    assert doc["schema_version"] == 2 and doc["metro"] == "se_mi" and doc["release"] == "R1"
+    assert doc["schema_version"] == 3 and doc["metro"] == "se_mi" and doc["release"] == "R1"
     path = tmp_path / "spots.json"
     write_spots_json(doc, path)
     assert json.loads(path.read_text(encoding="utf-8")) == doc
@@ -86,3 +86,14 @@ def test_write_is_atomic(tmp_path, monkeypatch):
         write_spots_json(doc, path)
     assert path.read_text(encoding="utf-8") == "old"
     assert sorted(p.name for p in tmp_path.iterdir()) == ["spots.json"]
+
+
+def test_recommended_and_sources_in_spot_and_chips():
+    plain = assemble_spot(CAND, VP, GLARE, HORIZON, AMEN, None)
+    assert plain["recommended"] is False and plain["sources"] == []
+    src = [{"name": "Dark Sky Guide", "url": "https://example.com/g"}]
+    s = assemble_spot(CAND, VP, GLARE, HORIZON, AMEN,
+                      CuratedEntry(id="pl_x", dark_sky_place=True, recommended=True, sources=src))
+    assert s["recommended"] is True and s["sources"] == src
+    assert s["why"] == ["Open lake horizon", "Low glare", "Paved access", "Dark Sky Place", "Recommended"]
+    assert "Recommended" not in assemble_spot(CAND, VP, GLARE, HORIZON, AMEN, CuratedEntry(id="pl_x"))["why"]

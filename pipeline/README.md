@@ -43,7 +43,11 @@ Sanity checks run before the tile step, so a failing strict build stops before t
 ## Curation
 
 `curated/<metro>.yaml` — keyed by GERS ID: `verified`, `dark_sky_place`, `access_note`,
-`unavailable` + `unavailable_reason`, `hidden` (drops bad/misplaced Overture records entirely). Unknown IDs are reported after each build; wrong field types are an error.
+`unavailable` + `unavailable_reason`, `hidden` (drops bad/misplaced Overture records entirely),
+`recommended` + `sources`. Three distinct tiers, do not conflate them:
+`recommended` = editorial rankings (best-of lists); set it only with `sources: [{name, url}]` citing them (adds a "Recommended" chip);
+`verified` = documented night/after-dark access (drives the access badge);
+`dark_sky_place` = an official designation (e.g. IDA). Unknown IDs are reported after each build; wrong field types are an error.
 An explicit `--curated <file>` that does not exist is an error; a missing default `curated/<metro>.yaml`
 only logs a warning.
 

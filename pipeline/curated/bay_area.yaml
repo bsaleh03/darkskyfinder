@@ -1,6 +1,6 @@
 # Curated facts for SF Bay Area spots, keyed by Overture GERS ID (release 2026-09-23.1).
 # Find IDs with: python -m darksky_pipeline.probe find --metro bay_area --release <R> --name "<name>"
-# Keys: id, label, verified, dark_sky_place, access_note, unavailable, unavailable_reason, hidden
+# Keys: id, label, verified, dark_sky_place, access_note, unavailable, unavailable_reason, hidden, recommended, sources
 #
 # 2026-10 review: no Dark Sky designation could be confirmed from an official source for
 # Pinnacles NP or Henry W. Coe SP - check darksky.org's Places directory before setting
