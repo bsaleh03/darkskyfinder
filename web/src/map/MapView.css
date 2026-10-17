@@ -56,6 +56,29 @@
   cursor: pointer;
 }
 
+.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M6 0h2v6h6v2H8v6H6V8H0V6h6z'/%3E%3C/svg%3E");
+}
+
+.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M0 6h14v2H0z'/%3E%3C/svg%3E");
+}
+
+/* Stock controls use white text, a #ddd divider and dark #333 icon images; draw them from tokens. */
+.maplibregl-ctrl-group button {
+  color: var(--ink);
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--glass-border);
+}
+
+.maplibregl-ctrl-group button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
+.maplibregl-ctrl-group button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+  background: var(--ink);
+  mask: var(--icon) center / 14px 14px no-repeat;
+}
+
 .map-glow-btn:focus-visible,
 .map-toast button:focus-visible,
 .maplibregl-ctrl-group button:focus-visible,
@@ -69,6 +92,15 @@
   backdrop-filter: blur(10px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-control);
+}
+
+/* The start marker is MapLibre's default pin (fill attributes, amber body, white dot); recolour it in red mode. */
+html[data-red="true"] .maplibregl-marker svg [fill="#F5C96B" i] {
+  fill: var(--amber);
+}
+
+html[data-red="true"] .maplibregl-marker svg [fill="#FFFFFF" i] {
+  fill: var(--sky-4);
 }
 
 /*

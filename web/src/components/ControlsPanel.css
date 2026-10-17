@@ -18,8 +18,51 @@
 .controls-slider {
   width: 100%;
   min-height: 44px;
+  margin: 0;
+  color: var(--ink);
+  appearance: none;
+  background: transparent;
   accent-color: var(--amber);
   cursor: pointer;
+}
+
+/* Track and thumb are drawn from tokens so red mode never shows the UA's white/grey slider. */
+.controls-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--muted);
+  border: 0;
+  border-radius: 2px;
+}
+
+.controls-slider::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  appearance: none;
+  background: var(--amber);
+  border: 0;
+  border-radius: 50%;
+}
+
+.controls-slider::-moz-range-track {
+  height: 4px;
+  background: var(--muted);
+  border: 0;
+  border-radius: 2px;
+}
+
+.controls-slider::-moz-range-progress {
+  height: 4px;
+  background: var(--amber);
+  border-radius: 2px;
+}
+
+.controls-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--amber);
+  border: 0;
+  border-radius: 50%;
 }
 
 .seg {

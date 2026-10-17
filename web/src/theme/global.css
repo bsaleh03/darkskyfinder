@@ -2,6 +2,11 @@
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: dark;
+  scrollbar-color: var(--muted) var(--sky-4);
+}
+
 html,
 body,
 #root {

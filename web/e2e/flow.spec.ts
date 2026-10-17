@@ -56,6 +56,54 @@ async function shadowedElements(page: Page): Promise<string[]> {
   })
 }
 
+/**
+ * Red (night-vision) mode must emit no white, blue or green light. Every visible, non-transparent
+ * colour in the page chrome (text, background incl. gradients, borders, outlines, SVG fill/stroke)
+ * must be red-dominant (green and blue at most half of red) or near-black. The map canvas is
+ * excluded (WebGL pixels; its style is recoloured via toRed and the canvas is masked in screenshots).
+ */
+async function nonRedColors(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = []
+    const describe = (el: Element) =>
+      `${el.tagName.toLowerCase()}${typeof el.className === 'string' && el.className ? `.${el.className.trim().split(/\s+/).join('.')}` : ''}`
+    const bad = (value: string): string[] => {
+      const found: string[] = []
+      if (/(color|oklch|oklab|lab|lch|hwb|hsl)a?\(/.test(value)) found.push(value)
+      for (const m of value.matchAll(/rgba?\(([^)]+)\)/g)) {
+        const [r, g, b, a = 1] = m[1].split(/[\s,/]+/).filter(Boolean).map(Number)
+        if (a === 0) continue
+        if (Math.max(r, g, b) <= 24) continue
+        if (g <= r * 0.5 && b <= r * 0.5) continue
+        found.push(m[0])
+      }
+      return found
+    }
+    const visible = (el: Element) => {
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) return false
+      return el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) : true
+    }
+    for (const el of document.querySelectorAll('body *')) {
+      if (el.matches('.maplibregl-canvas') || !visible(el)) continue
+      for (const pseudo of [null, '::before', '::after'] as const) {
+        const cs = getComputedStyle(el, pseudo)
+        if (pseudo && (cs.content === 'none' || cs.content === 'normal')) continue
+        const props = ['color', 'background-color', 'background-image']
+        for (const side of ['top', 'right', 'bottom', 'left']) {
+          if (parseFloat(cs.getPropertyValue(`border-${side}-width`)) > 0) props.push(`border-${side}-color`)
+        }
+        if (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0) props.push('outline-color')
+        if (el instanceof SVGElement) props.push('fill', 'stroke')
+        for (const prop of props) {
+          for (const v of bad(cs.getPropertyValue(prop))) out.push(`${describe(el)}${pseudo ?? ''} ${prop}: ${v}`)
+        }
+      }
+    }
+    return [...new Set(out)]
+  })
+}
+
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready)
   await expect(page.locator('main[aria-busy="true"]')).toHaveCount(0)
@@ -69,6 +117,10 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
     if (msg.type() === 'error') errors.push(msg.text())
   })
   page.on('pageerror', (err) => errors.push(err.message))
+  const tiles: { url: string; status: number; at: number }[] = []
+  page.on('response', (res) => {
+    if (res.url().includes('/e2e-tiles/')) tiles.push({ url: res.url(), status: res.status(), at: Date.now() })
+  })
 
   await page.clock.setFixedTime(CAPTURED_AT)
   await mockApi(page)
@@ -129,6 +181,7 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await expect(page.locator('html')).toHaveAttribute('data-red', 'true')
   await expect(page).toHaveURL(/glow=0/)
   await settle(page)
+  expect(await nonRedColors(page)).toEqual([])
   await page.screenshot({ path: testInfo.outputPath('main-red-full.png'), fullPage: true })
   await expect(page).toHaveScreenshot('main-red.png', { mask: mapMask(page) })
 
@@ -142,5 +195,24 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
   expect(await shadowedElements(page)).toEqual([])
+
+  // Selecting a card flies the map to it at z11, where the fixture basemap has tiles
+  // (see fixtures/tiles-region-se_mi.geojson), so the PMTiles archives are read with Range requests.
+  // The first expansion above already flew there; MapLibre keeps tiles across the restyle, so this
+  // checks the whole session rather than only requests after this click. Red mode turned the glow
+  // off, so turn it back on to read the light-pollution raster at z11 too.
+  await cards.first().getByRole('button', { expanded: false }).click()
+  await expect(page).toHaveURL(/spot=/)
+  await page.getByRole('button', { name: 'Light pollution glow' }).click()
+  await expect(page.getByRole('button', { name: 'Light pollution glow' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).not.toHaveURL(/glow=0/)
+  for (const file of ['basemap_se_mi_base', 'basemap_se_mi_transportation', 'basemap_se_mi_divisions', 'lightpollution_se_mi']) {
+    await expect
+      .poll(() => tiles.filter((t) => t.url.includes(`/se_mi/${file}.pmtiles`) && t.status === 206).length)
+      .toBeGreaterThan(2) // header + directory + at least one tile
+  }
+  await page.waitForLoadState('networkidle')
+  expect(tiles.filter((t) => t.status !== 200 && t.status !== 206)).toEqual([])
+  expect(await nonRedColors(page)).toEqual([])
   expect(errors).toEqual([])
 })
