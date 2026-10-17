@@ -1,0 +1,60 @@
+.verdict {
+  --accent: var(--muted);
+
+  padding: 14px 16px;
+  color: var(--ink);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-card);
+}
+
+.verdict--good {
+  --accent: var(--go);
+}
+
+.verdict--marginal {
+  --accent: var(--maybe);
+}
+
+.verdict--poor {
+  --accent: var(--no);
+}
+
+.verdict--unknown {
+  --accent: var(--muted);
+}
+
+.verdict-sentence {
+  margin: 0 0 10px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.verdict-rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.verdict-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.verdict-row dt {
+  color: var(--muted);
+}
+
+.verdict-row dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.verdict-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
