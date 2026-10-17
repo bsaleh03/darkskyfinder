@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRedMode } from '../../src/state/redMode'
 
@@ -7,7 +7,10 @@ describe('useRedMode', () => {
     localStorage.clear()
     delete document.documentElement.dataset.red
   })
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
 
   it('persists and sets data-red', () => {
     const { result } = renderHook(() => useRedMode())
@@ -36,5 +39,16 @@ describe('useRedMode', () => {
     act(() => result.current[1](true))
     expect(result.current[0]).toBe(true)
     expect(document.documentElement.dataset.red).toBe('true')
+  })
+
+  it('stays in sync across components', () => {
+    const a = renderHook(() => useRedMode())
+    const b = renderHook(() => useRedMode())
+    act(() => a.result.current[1](true))
+    expect(b.result.current[0]).toBe(true)
+    expect(document.documentElement.dataset.red).toBe('true')
+    act(() => b.result.current[1](false))
+    expect(a.result.current[0]).toBe(false)
+    expect(document.documentElement.dataset.red).toBeUndefined()
   })
 })

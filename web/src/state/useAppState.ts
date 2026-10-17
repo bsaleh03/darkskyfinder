@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { AccessKey, BorderKey, SortKey } from '../api/types'
 
 export type AppState = {
@@ -77,29 +77,48 @@ export function serializeState(s: AppState): string {
   return p.toString()
 }
 
+// Module-level store so every component shares one state.
+const listeners = new Set<() => void>()
+let cachedSearch: string | null = null
+let cachedState: AppState = parseState('')
+
+function getSnapshot(): AppState {
+  const search = window.location.search
+  if (search !== cachedSearch) {
+    cachedSearch = search
+    cachedState = parseState(search)
+  }
+  return cachedState
+}
+
+function notify() {
+  listeners.forEach((l) => l())
+}
+
+const onPop = () => notify()
+
+function subscribe(listener: () => void): () => void {
+  if (listeners.size === 0) window.addEventListener('popstate', onPop)
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) window.removeEventListener('popstate', onPop)
+  }
+}
+
+function update(patch: Partial<AppState>, opts?: { replace?: boolean }) {
+  const next = parseState(serializeState({ ...getSnapshot(), ...patch }))
+  const qs = serializeState(next)
+  const url = window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash
+  if (opts?.replace) window.history.replaceState(null, '', url)
+  else window.history.pushState(null, '', url)
+  notify()
+}
+
 export function useAppState(): [
   AppState,
   (patch: Partial<AppState>, opts?: { replace?: boolean }) => void,
 ] {
-  const [state, setState] = useState<AppState>(() => parseState(window.location.search))
-  const ref = useRef(state)
-  ref.current = state
-
-  useEffect(() => {
-    const onPop = () => setState(parseState(window.location.search))
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [])
-
-  const update = useCallback((patch: Partial<AppState>, opts?: { replace?: boolean }) => {
-    const next = { ...ref.current, ...patch }
-    const qs = serializeState(next)
-    const url = window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash
-    if (opts?.replace) window.history.replaceState(null, '', url)
-    else window.history.pushState(null, '', url)
-    ref.current = next
-    setState(next)
-  }, [])
-
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   return [state, update]
 }

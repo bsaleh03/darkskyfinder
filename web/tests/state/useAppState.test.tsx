@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseState, serializeState, useAppState } from '../../src/state/useAppState'
 
@@ -54,7 +54,10 @@ describe('parseState / serializeState', () => {
 
 describe('useAppState', () => {
   beforeEach(() => window.history.replaceState(null, '', '/'))
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
 
   it('push vs replace', () => {
     const push = vi.spyOn(window.history, 'pushState')
@@ -78,5 +81,42 @@ describe('useAppState', () => {
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
     expect(result.current[0].sort).toBe('best_view')
+  })
+})
+
+describe('useAppState shared store', () => {
+  beforeEach(() => window.history.replaceState(null, '', '/'))
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('shares state across components', () => {
+    const a = renderHook(() => useAppState())
+    const b = renderHook(() => useAppState())
+    act(() => a.result.current[1]({ sort: 'closest' }))
+    expect(b.result.current[0].sort).toBe('closest')
+    act(() => b.result.current[1]({ glow: false }))
+    expect(a.result.current[0]).toMatchObject({ sort: 'closest', glow: false })
+    expect(window.location.search).toBe('?sort=closest&glow=0')
+  })
+
+  it('normalizes patches', () => {
+    const { result } = renderHook(() => useAppState())
+    act(() => result.current[1]({ drive: 37 }))
+    expect(result.current[0].drive).toBe(30)
+    expect(window.location.search).toBe('?drive=30')
+  })
+
+  it('removes popstate listener after last unmount', () => {
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const a = renderHook(() => useAppState())
+    const b = renderHook(() => useAppState())
+    expect(add.mock.calls.filter((c) => c[0] === 'popstate')).toHaveLength(1)
+    a.unmount()
+    expect(remove.mock.calls.filter((c) => c[0] === 'popstate')).toHaveLength(0)
+    b.unmount()
+    expect(remove.mock.calls.filter((c) => c[0] === 'popstate')).toHaveLength(1)
   })
 })
