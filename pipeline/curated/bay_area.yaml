@@ -8,18 +8,109 @@
 # Henry W. Coe SP 1575c094-d1f9-4099-80a3-a49d821e2301. Mt Tamalpais / Mt Diablo have gate
 # closing hours - leave unverified unless an official source documents night access.
 spots:
-  - id: 0a53c5ea-0e4f-4760-8cd4-7ebb1f5295ad
-    label: "Pinnacles National Park (misplaced record: San Jose)"
-    hidden: true
-  - id: 9dcb24c7-de2f-43d6-9cfa-70bc16caacc2
-    label: "Pinnacles National Park (misplaced record: Carmel-by-the-Sea)"
-    hidden: true
-  - id: f96058e1-605f-4693-a29a-f956bc7038b1
-    label: "Pinnacles National Park (misplaced record: Hollister)"
-    hidden: true
-  - id: 29572c61-285a-46b0-89d9-66e38d58b28c
-    label: "Pinnacles National Park (misplaced record: north San Benito County (~35 km N of park))"
-    hidden: true
-  - id: bc94906b-0803-4e17-882f-ba961c915e3f
-    label: "Pinnacles National Park (misplaced record: Santa Clara County (~75 km NW of park))"
-    hidden: true
+- id: 0a53c5ea-0e4f-4760-8cd4-7ebb1f5295ad
+  label: 'Pinnacles National Park (misplaced record: San Jose)'
+  hidden: true
+- id: 9dcb24c7-de2f-43d6-9cfa-70bc16caacc2
+  label: 'Pinnacles National Park (misplaced record: Carmel-by-the-Sea)'
+  hidden: true
+- id: f96058e1-605f-4693-a29a-f956bc7038b1
+  label: 'Pinnacles National Park (misplaced record: Hollister)'
+  hidden: true
+- id: 29572c61-285a-46b0-89d9-66e38d58b28c
+  label: 'Pinnacles National Park (misplaced record: north San Benito County (~35 km N of park))'
+  hidden: true
+- id: bc94906b-0803-4e17-882f-ba961c915e3f
+  label: 'Pinnacles National Park (misplaced record: Santa Clara County (~75 km NW of park))'
+  hidden: true
+- id: d4fb0e3e-897f-3078-aabe-d301c440d7bf
+  access_note: Public star parties on select Saturdays Apr-Oct; gates otherwise close at sunset.
+  recommended: true
+  sources:
+  - name: Fremont Peak Observatory Association
+    url: https://www.fpoa.net/FPOA_Brochure-current.pdf
+  - name: Bay Nature
+    url: https://baynature.org/article/stargazing-in-the-sf-bay-area/
+  - name: 7x7
+    url: https://www.7x7.com/14-places-to-stargaze-bay-area-1807682788.html
+  - name: InsideHook
+    url: https://www.insidehook.com/travel-san-francisco/san-franciscos-best-dark-sky-spots-perseids/amp
+- id: 51b3fcd8-0236-4a0e-a523-e4ef361ce35c
+  access_note: Public star parties monthly Mar-Oct; gates otherwise close at sunset. Check the schedule before going.
+  recommended: true
+  sources:
+  - name: 7x7
+    url: https://www.7x7.com/14-places-to-stargaze-bay-area-1807682788.html
+  - name: KQED
+    url: https://www.kqed.org/quest/155/dark-secrets
+- id: 65b5dfe9-f501-4434-8315-2d9ecd35fcf2
+  access_note: Ticketed public evening events on limited dates; not open for general night access.
+  recommended: true
+  sources:
+  - name: Lick Observatory
+    url: https://www.lickobservatory.org/?p=296
+  - name: Bay Nature
+    url: https://baynature.org/article/stargazing-in-the-sf-bay-area/
+  - name: InsideHook
+    url: https://www.insidehook.com/travel-san-francisco/san-franciscos-best-dark-sky-spots-perseids/amp
+- id: 1575c094-d1f9-4099-80a3-a49d821e2301
+  access_note: Overnight access for registered campers; call the park about after-dark access.
+  recommended: true
+  sources:
+  - name: InsideHook
+    url: https://www.insidehook.com/travel-san-francisco/san-franciscos-best-dark-sky-spots-perseids/amp
+  - name: California State Parks stargazing flyer
+    url: https://demo2.parks.ca.gov/pages/24317/files/stargazingintheparks.pdf
+- id: 51184837-578e-4779-b577-019179d34f1e
+  access_note: Public star parties on select dates; gates otherwise close early. Check the schedule.
+  recommended: true
+  sources:
+  - name: Bay Nature
+    url: https://baynature.org/article/stargazing-in-the-sf-bay-area/
+  - name: 7x7
+    url: https://www.7x7.com/14-places-to-stargaze-bay-area-1807682788.html
+- id: db9011ed-72ab-3775-a7d4-a28c52bcba42
+  access_note: Public stargazing at the Robert Ferguson Observatory on scheduled ticketed nights.
+  recommended: true
+  sources:
+  - name: Bay Nature
+    url: https://baynature.org/article/stargazing-in-the-sf-bay-area/
+  - name: 7x7
+    url: https://www.7x7.com/14-places-to-stargaze-bay-area-1807682788.html
+- id: a24d145c-3deb-422e-8ae2-9fc76bf0de43
+  access_note: Club star parties Apr-Oct; park otherwise closes at sunset.
+  recommended: true
+  sources:
+  - name: 7x7
+    url: https://www.7x7.com/14-places-to-stargaze-bay-area-1807682788.html
+  - name: Bay Nature
+    url: https://baynature.org/article/stargazing-in-the-sf-bay-area/
+- id: cb83ee3e-7d89-488a-b5fe-b05d63bcf044
+  access_note: Check GGNRA closures and hours before going.
+  recommended: true
+  sources:
+  - name: 7x7
+    url: https://www.7x7.com/14-places-to-stargaze-bay-area-1807682788.html
+- id: 356767e0-30bc-42a3-9349-1f8a94a7fde7
+  recommended: true
+  sources:
+  - name: Golden Gate National Parks Conservancy
+    url: https://www.parksconservancy.org/node/4381
+- id: 83144f7d-7e26-4726-99d4-5b592236293e
+  access_note: Roadside pullouts; check for closures.
+  recommended: true
+  sources:
+  - name: Golden Gate National Parks Conservancy
+    url: https://www.parksconservancy.org/node/4381
+- id: 03cefc6c-a5e7-4484-a1a2-7474d8e2a077
+  access_note: Permits required for camping and beach fires.
+  recommended: true
+  sources:
+  - name: 7x7
+    url: https://www.7x7.com/14-places-to-stargaze-bay-area-1807682788.html
+- id: 9223ec8f-6417-479d-b5f2-4889e8d4eac8
+  access_note: Check parking lot closure hours.
+  recommended: true
+  sources:
+  - name: Golden Gate National Parks Conservancy
+    url: https://www.parksconservancy.org/node/4381

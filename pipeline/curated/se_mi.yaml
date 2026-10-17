@@ -6,11 +6,121 @@
 # (Port Crescent, portion north/west of the Pinnebog River). No official source found yet
 # for 24h / after-dark access, so nothing is marked verified.
 spots:
-  - id: a3cdd909-ea67-4bee-876a-2b0534f77960
-    label: Lake Hudson State Park
-    dark_sky_place: true
-    access_note: Michigan Dark Sky Preserve. Recreation Passport required; confirm night hours with the DNR.
-  - id: e900f28c-ca43-4a6a-bc18-512b1185507e
-    label: Port Crescent State Park
-    dark_sky_place: true
-    access_note: Dark Sky Preserve covers the park north and west of the Pinnebog River. Recreation Passport required; confirm night hours with the DNR.
+- id: a3cdd909-ea67-4bee-876a-2b0534f77960
+  label: Lake Hudson State Park
+  dark_sky_place: true
+  access_note: Call ahead for after-dark access outside the campground.
+  recommended: true
+  sources:
+  - name: Michigan DNR
+    url: https://www.michigan.gov/LakeHudson
+  - name: Visit Detroit
+    url: https://visitdetroit.com/inside-the-d/top-stargazing-spots/
+  - name: Visit Lenawee
+    url: https://www.visitlenawee.com/dark-sky-preserve-at-lake-hudson-state-recreation-area/
+- id: e900f28c-ca43-4a6a-bc18-512b1185507e
+  label: Port Crescent State Park
+  dark_sky_place: true
+  access_note: Dark Sky Preserve covers the park north and west of the Pinnebog River. Recreation Passport required; confirm night hours with the DNR.
+- id: fcf17d08-940a-44a3-a98f-ec8dbac2056e
+  label: Point Pelee National Park
+  dark_sky_place: true
+  access_note: Canadian dark-sky preserve; border crossing required. After-dark access mainly on special Dark Sky Nights or for registered campers.
+  recommended: true
+  sources:
+  - name: Parks Canada
+    url: https://parks.canada.ca/pelee
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: 65264819-a842-43b1-9a42-859ffe3909ec
+  access_note: Overnight access for registered campers (Green Lake campground).
+  recommended: true
+  sources:
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: 590998a7-4738-4f29-ad88-e39f3cf8ffe8
+  access_note: Overnight access for registered campers.
+  recommended: true
+  sources:
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: e1e1b08c-1e57-4b1d-9307-c81abd6690d9
+  access_note: Evening stargazing mainly via scheduled programs such as lantern walks.
+  recommended: true
+  sources:
+  - name: Visit Detroit
+    url: https://visitdetroit.com/inside-the-d/top-stargazing-spots/
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+- id: e94fda00-59eb-4041-b2db-6fa32224a138
+  recommended: true
+  sources:
+  - name: Visit Detroit
+    url: https://visitdetroit.com/inside-the-d/top-stargazing-spots/
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+- id: 69479b86-22fa-4ffe-a7de-87675051fc59
+  access_note: Overnight access for registered campers.
+  recommended: true
+  sources:
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: d58957e0-977e-3315-8dae-db3672128d9d
+  access_note: Overnight access for registered campers.
+  recommended: true
+  sources:
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: fce978f9-de23-4d7c-8f32-579e3698d98f
+  recommended: true
+  sources:
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: 7a0d92c6-cf77-4e26-ae3e-d0af930dc164
+  access_note: Overnight access for registered campers (Appleton Lake).
+  recommended: true
+  sources:
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: 976e74d0-ca85-41e2-b6ea-048850e5bc80
+  recommended: true
+  sources:
+  - name: Expedition Detroit
+    url: https://www.expeditiondetroit.com/post/best-stargazing-destinations-near-detroit
+  - name: Expedition Detroit (part I)
+    url: https://www.expeditiondetroit.com/post/embrace-the-dark-pt-i-the-best-stargazing-locations-near-detroit
+- id: 5faf6b2e-64ed-4000-82fe-4212531ebf55
+  recommended: true
+  sources:
+  - name: Visit Detroit
+    url: https://visitdetroit.com/inside-the-d/top-stargazing-spots/
+- id: 80e83406-e083-4e84-a661-28c6846b7fb2
+  access_note: Overnight access for registered campers.
+  recommended: true
+  sources:
+  - name: Visit Detroit
+    url: https://visitdetroit.com/inside-the-d/top-stargazing-spots/
+- id: 70cf6184-c490-45ae-9f91-cc972912f084
+  recommended: true
+  sources:
+  - name: Visit Detroit
+    url: https://visitdetroit.com/inside-the-d/top-stargazing-spots/
+- id: 6633c225-1af6-4744-8794-a0ec25a97ec4
+  recommended: true
+  sources:
+  - name: Visit Detroit
+    url: https://visitdetroit.com/inside-the-d/top-stargazing-spots/
