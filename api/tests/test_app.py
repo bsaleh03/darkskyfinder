@@ -5,7 +5,7 @@ from darksky_api.app import create_app
 from darksky_api.config import Settings
 from darksky_api.ratelimit import SlidingWindowLimiter
 from fakes import FakeForecast, FakeRouting, fixed_today
-from fixtures import CITY
+from fixtures import CITY, TEST_METRO
 from test_service import MINUTES
 
 SETTINGS = Settings(ors_api_key="secret-key", allowed_origins=("https://app.example", "http://localhost:5173"),
@@ -162,8 +162,58 @@ def test_spot_schema_documents_pass_through_fields(client):
     assert "past" in comps["TimelineHour"]["properties"]
 
 
+def test_spot_schema_declares_country_and_curation_fields(client):
+    comps = client.get("/openapi.json").json()["components"]["schemas"]
+    for f in ("country", "crosses_border", "recommended", "sources"):
+        assert f in comps["Spot"]["properties"], f
+    assert set(comps["Source"]["properties"]) == {"name", "url"}
+
+
+def test_border_param(client):
+    base = {"lat": CITY[1], "lon": CITY[0]}
+    top = client.get("/api/spots", params=base).json()["spots"][0]
+    assert top["country"] == "US" and top["crosses_border"] is False
+    assert top["recommended"] is False and top["sources"] == []
+    assert client.get("/api/spots", params={**base, "border": "exclude"}).status_code == 200
+    assert client.get("/api/spots", params={**base, "border": "nope"}).status_code == 422
+
+
 def test_spot_pass_through_values_serialized(client, store):
     top = client.get("/api/spots", params={"lat": CITY[1], "lon": CITY[0]}).json()["spots"][0]
     src = next(s for s in store.metros["test"].spots if s["id"] == top["id"])
     for f in ("category", "bortle", "glare", "horizon", "access", "amenities", "why", "dark_sky_place"):
         assert top[f] == src[f], f
+
+
+# --- .env support in build_default_app -----------------------------------------------
+
+def _env_app(monkeypatch, tmp_path, data_dir, env_text, env_key=None):
+    from darksky_api.app import build_default_app
+    import darksky_api.app as appmod
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+    monkeypatch.delenv("ORS_API_KEY", raising=False)
+    if env_key is not None:
+        monkeypatch.setenv("ORS_API_KEY", env_key)
+    (tmp_path / ".env").write_text(env_text, encoding="utf-8")
+    seen = {}
+    real = appmod.RoutingClient
+
+    def spy(http, key):
+        seen["key"] = key
+        return real(http, key)
+
+    monkeypatch.setattr(appmod, "RoutingClient", spy)
+    monkeypatch.setattr(appmod, "DataStore", type("S", (), {"load": staticmethod(
+        lambda d: __import__("darksky_api.data", fromlist=["DataStore"]).DataStore.load(d, {"test": TEST_METRO}))}))
+    build_default_app()
+    return seen["key"]
+
+
+def test_build_default_app_reads_dotenv(monkeypatch, tmp_path, data_dir):
+    assert _env_app(monkeypatch, tmp_path, data_dir, "ORS_API_KEY=from-dotenv") == "from-dotenv"
+
+
+def test_real_env_var_beats_dotenv(monkeypatch, tmp_path, data_dir):
+    assert _env_app(monkeypatch, tmp_path, data_dir, "ORS_API_KEY=from-dotenv", env_key="from-env") == "from-env"

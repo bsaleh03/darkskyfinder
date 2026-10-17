@@ -124,7 +124,7 @@ def test_start_sqm_nan_is_safe(tmp_path):
     from darksky_api.data import DataStore
     from darksky_api.config import MetroInfo
 
-    wide = MetroInfo("test", "Wide", (-85.5, 41.0, -83.0, 43.0), (-84.2, 41.9), 9, "America/Detroit", "X")
+    wide = MetroInfo("test", "Wide", (-85.5, 41.0, -83.0, 43.0), (-84.2, 41.9), 9, "America/Detroit", "X", "US")
     build_data_dir(tmp_path)
     store = DataStore.load(tmp_path, {"test": wide})
     q = SpotsQuery(lat=42.9, lon=-85.4)  # inside bbox, outside the darkness grid
@@ -238,3 +238,60 @@ def test_future_night_has_no_past_slots(store):
     assert not any(h["past"] for h in r["spots"][0]["timeline"])
     assert all("past" in h for h in r["spots"][0]["timeline"])
     assert not any(h["past"] for h in run(store)["spots"][0]["timeline"])
+
+
+# --- cross-border flag ---------------------------------------------------------------
+
+@pytest.fixture()
+def border_store(tmp_path):
+    from darksky_api.data import DataStore
+    from fixtures import CA_SPOT
+
+    build_data_dir(tmp_path, spots=SPOTS + [CA_SPOT])
+    return DataStore.load(tmp_path, {"test": TEST_METRO})
+
+
+BORDER_MINUTES = {**MINUTES, "sp_ca": 25.0}
+
+
+def test_crosses_border_flag(border_store):
+    r = run(border_store, routing=FakeRouting(BORDER_MINUTES))
+    flags = {s["id"]: s["crosses_border"] for s in r["spots"]}
+    assert flags["sp_ca"] is True
+    assert flags["sp_hudson"] is False and flags["sp_closed"] is False
+
+
+def test_crosses_border_false_when_country_unknown(store):
+    r = run(store)
+    assert all(s["crosses_border"] is False for s in r["spots"])
+    metro = store.metros["test"]
+    saved = [s["country"] for s in metro.spots]
+    try:
+        for s in metro.spots:
+            s["country"] = None
+        assert all(s["crosses_border"] is False for s in run(store)["spots"])
+    finally:
+        for s, c in zip(metro.spots, saved):
+            s["country"] = c
+
+
+def test_border_exclude_removes_and_skips_routing(border_store):
+    routing = FakeRouting(BORDER_MINUTES)
+    r = run(border_store, routing=routing, border="exclude")
+    assert "sp_ca" not in {s["id"] for s in r["spots"]}
+    assert "sp_ca" not in routing.calls[0][1]
+    routing2 = FakeRouting(BORDER_MINUTES)
+    assert "sp_ca" in {s["id"] for s in run(border_store, routing=routing2)["spots"]}
+    assert "sp_ca" in routing2.calls[0][1]
+
+
+def test_border_exclude_also_drops_unavailable_cross_border(tmp_path):
+    from darksky_api.data import DataStore
+    from fixtures import make_spot
+
+    ca_closed = make_spot("sp_ca_closed", "Closed CA", -84.1, 41.96, 21.5, unavailable=True, country="CA")
+    build_data_dir(tmp_path, spots=SPOTS + [ca_closed])
+    st = DataStore.load(tmp_path, {"test": TEST_METRO})
+    m = {**MINUTES, "sp_ca_closed": 20.0}
+    assert "sp_ca_closed" in {s["id"] for s in run(st, routing=FakeRouting(m))["spots"]}
+    assert "sp_ca_closed" not in {s["id"] for s in run(st, routing=FakeRouting(m), border="exclude")["spots"]}

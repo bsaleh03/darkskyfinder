@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from datetime import date, datetime
 from typing import Callable, Literal
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -116,10 +118,12 @@ def create_app(store: DataStore, routing, forecast, settings: Settings,
               max_drive: int = Query(config.DEFAULT_MAX_DRIVE, ge=config.MIN_MAX_DRIVE, le=config.MAX_MAX_DRIVE),
               access: Literal["all", "likely", "verified"] = "all",
               sort: Literal["relevant", "closest", "best_view"] = "relevant",
-              limit: int = Query(config.DEFAULT_LIMIT, ge=1, le=config.MAX_LIMIT)):
+              limit: int = Query(config.DEFAULT_LIMIT, ge=1, le=config.MAX_LIMIT),
+              border: Literal["include", "exclude"] = "include"):
         if not limiter.allow(_client_ip(request, hops)):
             return _rate_limited()
-        q = SpotsQuery(lat=lat, lon=lon, night=night, max_drive=max_drive, access=access, sort=sort, limit=limit)
+        q = SpotsQuery(lat=lat, lon=lon, night=night, max_drive=max_drive, access=access, sort=sort, limit=limit,
+                       border=border)
         return find_spots(store, routing, forecast, q, today=today, now=now)
 
     return app
@@ -127,6 +131,7 @@ def create_app(store: DataStore, routing, forecast, settings: Settings,
 
 def build_default_app() -> FastAPI:
     logging.basicConfig(level=logging.INFO)
+    load_dotenv(Path.cwd() / ".env", override=False)  # real environment variables win
     settings = load_settings(os.environ)
     store = DataStore.load(settings.data_dir)
     http = httpx.Client()

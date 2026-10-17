@@ -17,16 +17,17 @@ class MetroInfo:
     zoom: float
     timezone: str
     home_label: str
+    home_country: str  # ISO code; spots elsewhere are flagged crosses_border
 
 
 METROS: dict[str, MetroInfo] = {
     "se_mi": MetroInfo("se_mi", "SE Michigan", (-84.6, 41.65, -82.4, 44.1), (-83.15, 42.48), 8.5,
-                       "America/Detroit", "Royal Oak"),
+                       "America/Detroit", "Royal Oak", "US"),
     "bay_area": MetroInfo("bay_area", "SF Bay Area", (-123.2, 36.4, -121.0, 38.6), (-122.27, 37.80), 8.5,
-                          "America/Los_Angeles", "San Francisco"),
+                          "America/Los_Angeles", "San Francisco", "US"),
 }
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 NIGHT_DAYS_AHEAD = 6
 
 # Spots query

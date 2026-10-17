@@ -50,3 +50,10 @@ def test_trusted_proxy_hops():
     assert load_settings({"TRUSTED_PROXY_HOPS": "0"}).trusted_proxy_hops == 1
     assert load_settings({"TRUSTED_PROXY_HOPS": "lots"}).trusted_proxy_hops == 1
     assert config.SEARCH_RATE_LIMIT_PER_MIN == 60
+
+
+def test_schema_and_home_country():
+    from darksky_api.config import METROS, SCHEMA_VERSION
+
+    assert SCHEMA_VERSION == 3
+    assert all(m.home_country == "US" for m in METROS.values())

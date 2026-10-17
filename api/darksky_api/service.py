@@ -32,6 +32,7 @@ class SpotsQuery:
     access: str = "all"
     sort: str = "relevant"
     limit: int = config.DEFAULT_LIMIT
+    border: str = "include"
 
 
 ACCESS_ALLOWED = {"all": {"verified", "likely", "check_hours"}, "likely": {"verified", "likely"},
@@ -85,6 +86,8 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
     for s in metro.spots:
         if s["access"]["badge"] not in ACCESS_ALLOWED[q.access]:
             continue
+        if q.border == "exclude" and _crosses_border(s, metro):
+            continue
         km = haversine_km(q.lon, q.lat, s["lon"], s["lat"])
         if km <= reach_km:
             pool.append((km, s))
@@ -132,6 +135,7 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
             **s,
             "drive_minutes": round(minutes[s["id"]]),
             "drive_is_estimate": s["id"] in estimated,
+            "crosses_border": _crosses_border(s, metro),
             "darker_than_home": darker_than_home(s["sqm"], home if home_sqm is not None else float("nan")),
             "scores": {"site": round(site), "conditions": round(cond), "best_view": round(bv), "relevant": round(rel)},
             "timeline": [{"time": _iso(sl.time), "quality": round(sl.quality, 3), "cloud": sl.cloud,
@@ -158,6 +162,7 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
 
     unavailable = sorted((s for s in reachable if s["unavailable"]), key=lambda s: (minutes[s["id"]], s["id"]))
     tail = [{**s, "drive_minutes": round(minutes[s["id"]]), "drive_is_estimate": s["id"] in estimated,
+             "crosses_border": _crosses_border(s, metro),
              "darker_than_home": darker_than_home(s["sqm"], home if home_sqm is not None else float("nan")),
              "scores": None, "timeline": [], "best_window": None}
             for s in unavailable[:config.MAX_UNAVAILABLE_SHOWN]]
@@ -176,6 +181,11 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
         "drive_status": "approx" if estimated else "ok",
         "spots": ranked + tail,
     }
+
+
+def _crosses_border(spot: dict, metro: MetroData) -> bool:
+    country = spot.get("country")
+    return country is not None and country != metro.info.home_country
 
 
 def _prefilter(pool: list[tuple[float, dict]], q: SpotsQuery) -> list[dict]:

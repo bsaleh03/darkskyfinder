@@ -12,7 +12,7 @@ from pyproj import Transformer
 from darksky_api.config import MetroInfo
 
 TEST_METRO = MetroInfo("test", "Test Metro", (-84.40, 41.75, -84.00, 42.05), (-84.20, 41.90), 9.0,
-                       "America/Detroit", "Testville")
+                       "America/Detroit", "Testville", "US")
 CITY = (-84.05, 42.00)
 HUDSON = (-84.25, 41.83)
 EPSG = 32617
@@ -20,9 +20,11 @@ RES = 500.0
 
 
 def make_spot(id_, name, lon, lat, sqm, badge="check_hours", horizon="partial", penalty=0.0,
-              unavailable=False, display_name=None, area=None):
+              unavailable=False, display_name=None, area=None,
+              country="US", recommended=False, sources=None):
     return {
-        "id": id_, "name": name, "display_name": display_name or name, "area": area,
+        "id": id_, "name": name, "display_name": display_name or name, "area": area, "country": country,
+        "recommended": recommended, "sources": sources or [],
         "category": "park", "lon": lon, "lat": lat, "sqm": sqm, "bortle": 4,
         "sky_label": "Milky Way vivid" if sqm >= 21.3 else "Milky Way not visible",
         "radiance": 0.2,
@@ -43,6 +45,9 @@ SPOTS = [
     make_spot("sp_closed", "Closed Preserve", -84.30, 41.95, 21.5, "check_hours", "open", 0.0, unavailable=True),
     make_spot("sp_far", "Far Ridge", -84.39, 42.04, 21.7, "check_hours", "open", 0.0),
 ]
+
+# Not part of SPOTS (keeps the base expectations stable); tests add it explicitly.
+CA_SPOT = make_spot("sp_ca", "Maple Provincial Park", -84.10, 41.95, 21.6, "verified", "open", 0.0, country="CA")
 
 SEARCH_ROWS = [
     ("Testville", "locality", 42.00, -84.05),
@@ -76,7 +81,7 @@ def _write_search(path: Path) -> None:
     con.close()
 
 
-def build_data_dir(root: Path, spots=None, schema_version: int = 2) -> Path:
+def build_data_dir(root: Path, spots=None, schema_version: int = 3) -> Path:
     d = root / TEST_METRO.key
     d.mkdir(parents=True, exist_ok=True)
     doc = {"schema_version": schema_version, "metro": "test", "release": "2099-01-01.0",

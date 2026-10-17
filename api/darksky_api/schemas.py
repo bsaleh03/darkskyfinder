@@ -108,12 +108,21 @@ class Amenities(BaseModel):
     food: Amenity | None
 
 
+class Source(BaseModel):
+    name: str
+    url: str
+
+
 class Spot(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str
     name: str
     display_name: str
     area: str | None
+    country: str | None
+    crosses_border: bool
+    recommended: bool
+    sources: list[Source]
     category: str
     lon: float
     lat: float
