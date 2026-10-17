@@ -1,0 +1,44 @@
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.controls-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.controls-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.controls-slider {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--amber);
+  cursor: pointer;
+}
+
+.seg {
+  display: flex;
+  gap: 8px;
+}
+
+.seg-btn {
+  flex: 1 1 0;
+  padding: 0 8px;
+}
+
+.controls-switch {
+  align-self: flex-start;
+}
+
+.controls-slider:focus-visible,
+.seg-btn:focus-visible,
+.controls-switch:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
