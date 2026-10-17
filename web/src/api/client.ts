@@ -31,7 +31,7 @@ export function errorMessage(e: ApiError): string {
     case 'rate_limited':
       return 'Too many searches — try again in a minute.'
     case 'night_out_of_range':
-      return 'Forecasts cover tonight and the next 6 nights � pick one of those.'
+      return 'Forecasts cover tonight and the next 6 nights — pick one of those.'
     case 'invalid':
       return 'That search didn’t look right. Check the location and try again.'
     default:
