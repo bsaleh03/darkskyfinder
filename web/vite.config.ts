@@ -1,7 +1,8 @@
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { checkBuildEnv } from './buildenv'
 import { devtilesMiddleware } from './devtiles'
 
 // Serves local PMTiles with Range support: real pipeline output at /tiles, e2e fixtures at /e2e-tiles.
@@ -16,11 +17,21 @@ const devTiles = (mounts: Record<string, string> = { '/tiles': '../pipeline/out'
   }
 }
 
-export default defineConfig({
-  plugins: [react(), devTiles({ '/tiles': '../pipeline/out', '/e2e-tiles': 'e2e/fixtures/tiles' })],
-  test: {
-    environment: 'jsdom',
-    setupFiles: ['src/test/setup.ts'],
-    include: ['tests/**/*.test.{ts,tsx}'],
-  },
+export default defineConfig(({ command, mode }) => {
+  if (command === 'build') checkBuildEnv({ ...loadEnv(mode, __dirname, 'VITE_'), ...process.env })
+  return {
+    plugins: [react(), devTiles({ '/tiles': '../pipeline/out', '/e2e-tiles': 'e2e/fixtures/tiles' })],
+    build: {
+      chunkSizeWarningLimit: 900, // the map-vendor chunk (~820 kB, ~225 kB gzip) is expected to be large
+      rollupOptions: {
+        // MapLibre and PMTiles are most of the bundle and change rarely: their own chunk caches across app releases.
+        output: { manualChunks: { 'map-vendor': ['maplibre-gl', 'pmtiles'] } },
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['src/test/setup.ts'],
+      include: ['tests/**/*.test.{ts,tsx}'],
+    },
+  }
 })

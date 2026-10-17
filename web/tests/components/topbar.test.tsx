@@ -9,6 +9,7 @@ import { LocateButton } from '../../src/components/LocateButton'
 import { MetroSwitch } from '../../src/components/MetroSwitch'
 import { RedModeToggle } from '../../src/components/RedModeToggle'
 import { SearchBox } from '../../src/components/SearchBox'
+import { TopBar } from '../../src/components/TopBar'
 
 vi.mock('../../src/api/client', async (orig) => {
   const actual = await orig<typeof import('../../src/api/client')>()
@@ -191,5 +192,60 @@ describe('MetroSwitch', () => {
     expect(screen.getByRole('combobox')).toHaveValue('se_mi')
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'bay_area' } })
     expect(onChange).toHaveBeenCalledWith('bay_area')
+  })
+})
+
+describe('TopBar start chip', () => {
+  function renderBar(startLabel: string | null = 'Royal Oak') {
+    const qc = makeQueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        <TopBar
+          startLabel={startLabel}
+          regions={[]}
+          metro="se_mi"
+          onMetroChange={vi.fn()}
+          onPick={vi.fn()}
+          onLocate={vi.fn()}
+          onLocateError={vi.fn()}
+        />
+        <button type="button">elsewhere</button>
+      </QueryClientProvider>,
+    )
+  }
+
+  it('tapping the chip focuses the search input; Escape returns to the chip', () => {
+    renderBar()
+    fireEvent.click(screen.getByRole('button', { name: 'Royal Oak' }))
+    const input = screen.getByRole('combobox', { name: 'Search for a place' })
+    expect(input).toHaveFocus()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByRole('combobox', { name: 'Search for a place' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Royal Oak' })).toHaveFocus()
+  })
+
+  it('leaving an empty search shows the chip again, but not when moving to Use my location', () => {
+    renderBar()
+    fireEvent.click(screen.getByRole('button', { name: 'Royal Oak' }))
+    const input = screen.getByRole('combobox', { name: 'Search for a place' })
+    const locate = screen.getByRole('button', { name: 'Use my location' })
+    fireEvent.blur(input, { relatedTarget: locate })
+    expect(screen.getByRole('combobox', { name: 'Search for a place' })).toBeInTheDocument()
+    input.focus()
+    fireEvent.change(input, { target: { value: 'roy' } })
+    fireEvent.blur(input, { relatedTarget: screen.getByRole('button', { name: 'elsewhere' }) })
+    expect(screen.getByRole('combobox', { name: 'Search for a place' })).toBeInTheDocument() // a typed query is kept
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.blur(input, { relatedTarget: screen.getByRole('button', { name: 'elsewhere' }) })
+    expect(screen.queryByRole('combobox', { name: 'Search for a place' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Royal Oak' })).toBeInTheDocument()
+  })
+
+  it('without a start the search stays', () => {
+    renderBar(null)
+    const input = screen.getByRole('combobox', { name: 'Search for a place' })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    fireEvent.blur(input)
+    expect(screen.getByRole('combobox', { name: 'Search for a place' })).toBeInTheDocument()
   })
 })

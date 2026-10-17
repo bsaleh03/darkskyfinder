@@ -144,6 +144,16 @@ describe('attribution', () => {
       expect(src[`${m}-glow`].attribution).toContain('VIIRS VNL, EOG / Colorado School of Mines')
     }
   })
+
+  it('attribution links open safely in a new tab', () => {
+    const src = buildStyle(base).sources as Record<string, { attribution?: string }>
+    const links = Object.values(src).flatMap((s) => [...(s.attribution ?? '').matchAll(/<a [^>]*>/g)].map((m) => m[0]))
+    expect(links.length).toBeGreaterThan(0)
+    for (const a of links) {
+      expect(a).toContain('target="_blank"')
+      expect(a).toContain('rel="noopener noreferrer"')
+    }
+  })
 })
 
 describe('toRed', () => {

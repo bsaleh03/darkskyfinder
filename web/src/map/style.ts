@@ -18,8 +18,8 @@ const MAJOR = ['motorway', 'trunk']
 const MID = ['primary', 'secondary']
 
 // Attribution shown in MapLibre's compact control (Overture themes are ODbL/CC BY sources; see README credits).
-const OVERTURE = '<a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a>'
-const OSM = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>'
+const OVERTURE = '<a href="https://overturemaps.org" target="_blank" rel="noopener noreferrer">Overture Maps Foundation</a>'
+const OSM = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>'
 export const ATTRIBUTION: Record<(typeof THEMES)[number] | 'glow', string> = {
   base: `${OVERTURE}, ${OSM}, © ESA WorldCover project 2020`,
   transportation: `${OVERTURE}, ${OSM}, TomTom`,

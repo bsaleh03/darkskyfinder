@@ -12,9 +12,12 @@ export function metroName(key: string): string {
 interface Props {
   onPick: (hit: SearchHit) => void
   placeholder?: string
+  autoFocus?: boolean
+  /** Escape with no list open, or focus leaving an empty box (`next` is where focus went). */
+  onDismiss?: (via: 'escape' | 'blur', next: Element | null) => void
 }
 
-export function SearchBox({ onPick, placeholder = 'Search a town or place' }: Props) {
+export function SearchBox({ onPick, placeholder = 'Search a town or place', autoFocus, onDismiss }: Props) {
   const [text, setText] = useState('')
   const [dismissed, setDismissed] = useState(false)
   const [active, setActive] = useState(-1)
@@ -54,6 +57,9 @@ export function SearchBox({ onPick, placeholder = 'Search a town or place' }: Pr
       e.preventDefault()
       setDismissed(true)
       setActive(-1)
+    } else if (e.key === 'Escape' && onDismiss) {
+      e.preventDefault()
+      onDismiss('escape', null)
     }
   }
 
@@ -69,6 +75,7 @@ export function SearchBox({ onPick, placeholder = 'Search a town or place' }: Pr
         aria-controls={open ? listId : undefined}
         aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
         autoComplete="off"
+        autoFocus={autoFocus}
         placeholder={placeholder}
         value={text}
         onChange={(e) => {
@@ -77,7 +84,10 @@ export function SearchBox({ onPick, placeholder = 'Search a town or place' }: Pr
           setActive(-1)
         }}
         onKeyDown={onKeyDown}
-        onBlur={() => setDismissed(true)}
+        onBlur={(e) => {
+          setDismissed(true)
+          if (text.trim() === '') onDismiss?.('blur', e.relatedTarget instanceof Element ? e.relatedTarget : null)
+        }}
       />
       {open && (
         <ul className="search-list" role="listbox" id={listId} aria-label="Search results">
