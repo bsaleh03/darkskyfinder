@@ -1,3 +1,5 @@
+import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
+import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { buildStyle } from '../../src/map/style'
 import { toRed } from '../../src/map/color'
@@ -107,6 +109,24 @@ describe('buildStyle', () => {
           expect(k).not.toMatch(/shadow|translate-anchor/)
         }
       }
+    }
+  })
+})
+
+describe('style validity', () => {
+  it('passes the MapLibre style spec validator (normal and red)', () => {
+    for (const red of [false, true]) {
+      expect(validateStyleMin(buildStyle({ ...base, red }) as never)).toEqual([])
+    }
+  })
+
+  it('default glyphs URL is same-origin and fonts are shipped', () => {
+    const g = buildStyle(base).glyphs!
+    expect(g.startsWith(import.meta.env.BASE_URL)).toBe(true)
+    expect(g).not.toMatch(/^https?:/)
+    for (const l of buildStyle(base).layers) {
+      const f = (l as { layout?: { 'text-font'?: string[] } }).layout?.['text-font']
+      if (f) for (const n of f) expect(existsSync(`public/glyphs/${n}/0-255.pbf`), n).toBe(true)
     }
   })
 })

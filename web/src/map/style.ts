@@ -10,7 +10,8 @@ export interface StyleOpts {
 }
 
 const THEMES = ['base', 'transportation', 'buildings', 'divisions'] as const
-const FONT = ['Open Sans Semibold', 'Arial Unicode MS Bold']
+const FONT_PLACE = ['Noto Sans Bold']
+const FONT_ROAD = ['Noto Sans Regular']
 // Verified against real tiles: segment.class is the road class, subtype is road|rail;
 // land_use.subtype park|protected|recreation|golf; land_cover.subtype forest.
 const MAJOR = ['motorway', 'trunk']
@@ -88,7 +89,7 @@ export function buildStyle(opts: StyleOpts): StyleSpecification {
     id: `labels-places-${m}`, type: 'symbol', source: `${m}-divisions`, 'source-layer': 'division_area',
     filter: inList('subtype', ['locality', 'county', 'region']) as never,
     layout: {
-      'text-field': ['get', '@name'], 'text-font': FONT,
+      'text-field': ['get', '@name'], 'text-font': FONT_PLACE,
       'text-size': ['interpolate', ['linear'], ['zoom'], 6, 11, 12, 13] as never,
     },
     paint: text,
@@ -97,13 +98,13 @@ export function buildStyle(opts: StyleOpts): StyleSpecification {
     id: `labels-roads-${m}`, type: 'symbol', source: `${m}-transportation`, 'source-layer': 'segment',
     filter: ['all', ['==', ['get', 'subtype'], 'road'], inList('class', MAJOR)] as never,
     minzoom: 8,
-    layout: { 'symbol-placement': 'line', 'text-field': ['get', '@name'], 'text-font': FONT, 'text-size': 11 },
+    layout: { 'symbol-placement': 'line', 'text-field': ['get', '@name'], 'text-font': FONT_ROAD, 'text-size': 11 },
     paint: text,
   }])
 
   return {
     version: 8,
-    glyphs: opts.glyphs ?? 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    glyphs: opts.glyphs ?? `${import.meta.env.BASE_URL}glyphs/{fontstack}/{range}.pbf`,
     sources,
     layers,
   }
