@@ -1,15 +1,15 @@
 html[data-red="true"] {
-  --sky-1: #2a0a0a;
-  --sky-2: #1a0505;
-  --sky-3: #100303;
-  --sky-4: #080101;
-  --ink: #ff9a8a;
-  --muted: #c4584a;
-  --amber: #ff6a4d;
-  --violet: #d4483a;
-  --go: #e0624e;
-  --maybe: #c9503f;
-  --no: #a8382e;
-  --glass: rgba(40 8 8 / 55%);
-  --glass-border: rgba(255 80 60 / 14%);
+  --sky-1: #000;
+  --sky-2: #000;
+  --sky-3: #000;
+  --sky-4: #000;
+  --ink: #ff5a4f;
+  --muted: #b3261e;
+  --amber: #ff3b30;
+  --violet: #cc2f26;
+  --go: #ff6b60;
+  --maybe: #e0453b;
+  --no: #a8231b;
+  --glass: rgb(40 0 0 / 60%);
+  --glass-border: rgb(255 59 48 / 20%);
 }
