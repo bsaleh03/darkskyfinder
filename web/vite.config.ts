@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { devtilesMiddleware } from './devtiles'
 
-// Serves local PMTiles with Range support. Task 12 mounts a second root at /e2e-tiles.
+// Serves local PMTiles with Range support: real pipeline output at /tiles, e2e fixtures at /e2e-tiles.
 const devTiles = (mounts: Record<string, string> = { '/tiles': '../pipeline/out' }): Plugin => {
   const mount = (use: (path: string, mw: ReturnType<typeof devtilesMiddleware>) => void) => {
     for (const [path, dir] of Object.entries(mounts)) use(path, devtilesMiddleware(resolve(__dirname, dir)))
@@ -17,7 +17,7 @@ const devTiles = (mounts: Record<string, string> = { '/tiles': '../pipeline/out'
 }
 
 export default defineConfig({
-  plugins: [react(), devTiles()],
+  plugins: [react(), devTiles({ '/tiles': '../pipeline/out', '/e2e-tiles': 'e2e/fixtures/tiles' })],
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
