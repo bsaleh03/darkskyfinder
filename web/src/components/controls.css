@@ -1,0 +1,22 @@
+.ctl-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  color: var(--ink);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ctl-btn[aria-checked="true"] {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.ctl-select option {
+  color: var(--ink);
+  background: var(--sky-3);
+}
