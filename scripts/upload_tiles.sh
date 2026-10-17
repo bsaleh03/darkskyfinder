@@ -20,7 +20,8 @@ METROS=(se_mi bay_area)
 TILE_RE='^(basemap_[a-z_]+_(base|transportation|buildings|divisions)|lightpollution_[a-z_]+)\.pmtiles$'
 
 command -v rclone >/dev/null || { echo "rclone not found on PATH" >&2; exit 1; }
-rclone listremotes | grep -qx 'r2:' || {
+REMOTES="$(rclone listremotes)"
+grep -qx "r2:" <<<"$REMOTES" || {
   echo "rclone remote 'r2' not configured. Run 'rclone config' (S3 / Cloudflare) first." >&2; exit 1; }
 
 for m in "${METROS[@]}"; do

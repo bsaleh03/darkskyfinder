@@ -17,6 +17,17 @@ const FONT_ROAD = ['Noto Sans Regular']
 const MAJOR = ['motorway', 'trunk']
 const MID = ['primary', 'secondary']
 
+// Attribution shown in MapLibre's compact control (Overture themes are ODbL/CC BY sources; see README credits).
+const OVERTURE = '<a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a>'
+const OSM = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>'
+export const ATTRIBUTION: Record<(typeof THEMES)[number] | 'glow', string> = {
+  base: `${OVERTURE}, ${OSM}, © ESA WorldCover project 2020`,
+  transportation: `${OVERTURE}, ${OSM}, TomTom`,
+  buildings: `${OVERTURE}, ${OSM}`,
+  divisions: `${OVERTURE}, ${OSM}`,
+  glow: 'VIIRS VNL, EOG / Colorado School of Mines',
+}
+
 const C = {
   land: '#141A2E', water: '#0C1734', parks: '#18302A', forest: '#111729', buildings: '#1B2238',
   major: '#59658F', mid: '#3D4870', minor: '#2C3552', boundary: '#3A4466',
@@ -33,12 +44,17 @@ export function buildStyle(opts: StyleOpts): StyleSpecification {
   const base = opts.tilesUrl.replace(/\/+$/, '')
   for (const m of opts.metros) {
     for (const t of THEMES) {
-      sources[`${m}-${t}`] = { type: 'vector', url: `pmtiles://${base}/${m}/basemap_${m}_${t}.pmtiles` }
+      sources[`${m}-${t}`] = {
+        type: 'vector',
+        url: `pmtiles://${base}/${m}/basemap_${m}_${t}.pmtiles`,
+        attribution: ATTRIBUTION[t],
+      }
     }
     sources[`${m}-glow`] = {
       type: 'raster',
       url: `pmtiles://${base}/${m}/lightpollution_${m}.pmtiles`,
       tileSize: 256,
+      attribution: ATTRIBUTION.glow,
     }
   }
 

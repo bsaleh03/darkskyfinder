@@ -79,6 +79,38 @@
   mask: var(--icon) center / 14px 14px no-repeat;
 }
 
+/* Attribution: MapLibre's stock control is white/black; use glass + ink tokens (also in red mode). */
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib.maplibregl-compact,
+.maplibregl-ctrl-attrib.maplibregl-compact-show {
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.maplibregl-ctrl-attrib a,
+.maplibregl-ctrl-attrib a:hover {
+  color: var(--ink);
+}
+
+.maplibregl-ctrl-attrib-button {
+  background: transparent;
+  background-image: none;
+}
+
+.maplibregl-ctrl-attrib-button::before {
+  content: "i";
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 24px;
+  display: block;
+  text-align: center;
+}
+
 .map-glow-btn:focus-visible,
 .map-toast button:focus-visible,
 .maplibregl-ctrl-group button:focus-visible,

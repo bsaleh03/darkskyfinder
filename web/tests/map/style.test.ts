@@ -47,12 +47,12 @@ describe('buildStyle', () => {
     const s = buildStyle(base)
     for (const m of base.metros) {
       for (const t of ['base', 'transportation', 'buildings', 'divisions']) {
-        expect(s.sources[`${m}-${t}`]).toEqual({
+        expect(s.sources[`${m}-${t}`]).toMatchObject({
           type: 'vector',
           url: `pmtiles://https://t.example/tiles/${m}/basemap_${m}_${t}.pmtiles`,
         })
       }
-      expect(s.sources[`${m}-glow`]).toEqual({
+      expect(s.sources[`${m}-glow`]).toMatchObject({
         type: 'raster',
         url: `pmtiles://https://t.example/tiles/${m}/lightpollution_${m}.pmtiles`,
         tileSize: 256,
@@ -127,6 +127,21 @@ describe('style validity', () => {
     for (const l of buildStyle(base).layers) {
       const f = (l as { layout?: { 'text-font'?: string[] } }).layout?.['text-font']
       if (f) for (const n of f) expect(existsSync(`public/glyphs/${n}/0-255.pbf`), n).toBe(true)
+    }
+  })
+})
+
+describe('attribution', () => {
+  it('credits Overture, OSM, TomTom, ESA and VIIRS on the sources', () => {
+    const src = buildStyle(base).sources as Record<string, { attribution?: string }>
+    for (const m of base.metros) {
+      for (const t of ['base', 'transportation', 'buildings', 'divisions']) {
+        expect(src[`${m}-${t}`].attribution).toContain('Overture Maps Foundation')
+        expect(src[`${m}-${t}`].attribution).toContain('© OpenStreetMap contributors')
+      }
+      expect(src[`${m}-transportation`].attribution).toContain('TomTom')
+      expect(src[`${m}-base`].attribution).toContain('ESA WorldCover')
+      expect(src[`${m}-glow`].attribution).toContain('VIIRS VNL, EOG / Colorado School of Mines')
     }
   })
 })

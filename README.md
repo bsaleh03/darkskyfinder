@@ -11,7 +11,7 @@ Overture Maps supplies the places and the map:
 - **Places**: parks, nature areas and other candidate spots (and the start-point search index).
 - **Land use / land cover**: filters to park-like, open land and informs the basemap.
 - **Transportation**: road network for the basemap and access sanity checks.
-- **Buildings**: built-up area for the basemap (and as a light-source proxy).
+- **Buildings**: building footprints for the basemap, and a nearby-building count that feeds the per-spot glare factor.
 - **Divisions**: localities, regions and borders for search and the basemap (including the Canada border option).
 
 These are extracted for each metro and turned into a self-hosted **PMTiles** basemap in a moonlit style
@@ -114,9 +114,12 @@ The free API plan sleeps when idle; the first request shows a "Waking up the sta
 
 ## Credits and licenses
 
-- **Overture Maps Foundation** data (places, land use, land cover, transportation, buildings, divisions, base):
-  per-theme licenses (ODbL for some themes, CDLA Permissive 2.0 for others); attribution "Overture Maps Foundation".
-  See https://docs.overturemaps.org/attribution/.
+- **Overture Maps Foundation** (https://docs.overturemaps.org/attribution/): Base, Buildings, Divisions and
+  Transportation are ODbL, built on "© OpenStreetMap contributors" (plus Esri Community Maps, Microsoft and
+  Google building footprints, geoBoundaries and others per theme). Transportation also credits TomTom; Base
+  credits "© ESA WorldCover project 2020" (contains modified Copernicus Sentinel data, CC BY 4.0), NOAA ETOPO1
+  and GLOBathy. Places is CDLA Permissive 2.0 (Meta, Microsoft and others), with Foursquare portions under
+  Apache 2.0 and AllThePlaces under CC0. The map's attribution control credits Overture, OSM, TomTom, ESA and VIIRS.
 - **VIIRS Nighttime Lights (VNL v2)**: Earth Observation Group, Payne Institute, Colorado School of Mines.
 - **Open-Meteo** weather API (CC BY 4.0, non-commercial free tier).
 - **OpenRouteService** drive times (heigit.org, openrouteservice.org).
