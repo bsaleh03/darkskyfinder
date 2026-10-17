@@ -1,0 +1,6 @@
+{
+  "extends": "stylelint-config-standard",
+  "rules": {
+    "property-disallowed-list": ["box-shadow", "text-shadow"]
+  }
+}

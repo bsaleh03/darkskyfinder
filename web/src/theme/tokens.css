@@ -1,0 +1,17 @@
+:root {
+  --sky-1: #1a1840;
+  --sky-2: #0b0f2a;
+  --sky-3: #070a18;
+  --sky-4: #05060f;
+  --ink: #eef0f7;
+  --muted: #9cacc3;
+  --amber: #f5c96b;
+  --violet: #a58bde;
+  --go: #7fd6a0;
+  --maybe: #f0c070;
+  --no: #f0808a;
+  --glass: rgba(20 24 48 / 55%);
+  --glass-border: rgba(255 255 255 / 8%);
+  --radius-card: 16px;
+  --radius-control: 12px;
+}
