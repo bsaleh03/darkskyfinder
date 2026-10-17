@@ -8,3 +8,8 @@ __pycache__/
 .pytest_cache/
 pipeline/tools/
 pipeline/*.log
+
+api/.venv/
+
+.env
+*.env

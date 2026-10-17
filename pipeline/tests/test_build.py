@@ -79,7 +79,8 @@ def test_radiance_present_and_finite(built):
 
 def test_search_index_built(built):
     _, _, out = built
-    assert query(out / "search_test.sqlite", "main st")[0]["kind"] == "address"
+    assert query(out / "search_test.sqlite", "main st") == []
+    assert query(out / "search_test.sqlite", "testville")[0]["kind"] == "locality"
 
 
 # --- I9: tile tooling checked up front; checks run before tiles ------------------
@@ -171,6 +172,8 @@ def test_area_and_display_name(built):
     summary, spots, _ = built
     assert spots["pl_city"]["area"] == "Testville"
     assert spots["pl_hudson"]["area"] is None and spots["pl_camp"]["area"] is None
+    assert spots["pl_city"]["country"] == "US"
+    assert spots["pl_hudson"]["country"] is None
     for s in spots.values():
         assert s["display_name"] == s["name"]
     assert summary.merged_duplicates == 0

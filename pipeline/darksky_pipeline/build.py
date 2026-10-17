@@ -104,7 +104,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     log.info("merged %d duplicate spots", merged)
     area_finder = AreaFinder(frames["division_areas"])
     for s in spots:
-        s["area"] = area_finder.area_for(s["lon"], s["lat"])
+        s["area"], s["country"] = area_finder.lookup(s["lon"], s["lat"])
     apply_display_names(spots)
 
     doc = build_spots_document(metro.key, release, spots)

@@ -12,7 +12,7 @@ _BADGE_RANK = {"verified": 0, "likely": 1, "check_hours": 2}
 
 def _is_curated(s: dict) -> bool:
     return (s.get("access", {}).get("badge") == "verified" or bool(s.get("dark_sky_place"))
-            or bool(s.get("unavailable")))
+            or bool(s.get("unavailable")) or bool(s.get("recommended")))
 
 
 def _best_key(s: dict):
@@ -29,7 +29,7 @@ def _dist_m(a: dict, b: dict) -> float:
 def merge_duplicates(spots: list[dict], radius_m: float = config.DUPLICATE_MERGE_M) -> tuple[list[dict], int]:
     """Collapse same-normalized-name spots whose viewing points chain within radius_m.
 
-    Keeps the darkest (ties: better badge, lowest id); a curated spot always wins over uncurated.
+    Keeps the darkest (ties: better badge, lowest id); a curated (incl. recommended) spot always wins over uncurated.
     Returns (kept spots in input order, number removed).
     """
     by_name: dict[str, list[int]] = defaultdict(list)

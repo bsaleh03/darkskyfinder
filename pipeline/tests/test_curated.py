@@ -72,3 +72,31 @@ def test_hidden_loads_and_defaults_false(tmp_path):
 def test_hidden_must_be_bool(tmp_path):
     with pytest.raises(ValueError, match="hidden"):
         load_curated(write(tmp_path, 'spots:\n  - id: a\n    hidden: "yes"\n'))
+
+
+def test_recommended_and_sources(tmp_path):
+    p = write(tmp_path, """
+spots:
+  - id: a
+    recommended: true
+    sources:
+      - {name: Guide, url: "https://x.org/a"}
+  - id: b
+""")
+    data = load_curated(p)
+    assert data["a"].recommended and data["a"].sources == [{"name": "Guide", "url": "https://x.org/a"}]
+    assert data["b"].recommended is False and data["b"].sources == []
+
+
+@pytest.mark.parametrize("body", [
+    "recommended: yes please",
+    "sources: not-a-list",
+    "sources: [oops]",
+    "sources: [{name: '', url: 'https://x'}]",
+    "sources: [{name: N, url: 'ftp://x'}]",
+    "sources: [{name: N}]",
+    "sources: [{name: N, url: 'https://x', extra: 1}]",
+])
+def test_bad_recommended_sources_rejected(tmp_path, body):
+    with pytest.raises(ValueError):
+        load_curated(write(tmp_path, f"spots:\n  - id: a\n    {body}\n"))

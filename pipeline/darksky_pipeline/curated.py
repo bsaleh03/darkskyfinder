@@ -1,7 +1,7 @@
 """Hand-curated facts about spots, keyed by Overture GERS ID."""
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 import yaml
@@ -17,10 +17,12 @@ class CuratedEntry:
     unavailable: bool = False
     unavailable_reason: str | None = None
     hidden: bool = False
+    recommended: bool = False
+    sources: list[dict] = field(default_factory=list)
 
 
 _ALLOWED = {f.name for f in fields(CuratedEntry)}
-_BOOL_FIELDS = ("verified", "dark_sky_place", "unavailable", "hidden")
+_BOOL_FIELDS = ("verified", "dark_sky_place", "unavailable", "hidden", "recommended")
 _STR_FIELDS = ("label",)
 _OPTIONAL_STR_FIELDS = ("access_note", "unavailable_reason")
 
@@ -37,6 +39,20 @@ def _check_types(path: Path, raw: dict) -> None:
             raise ValueError(f"{path}: entry {raw['id']} field {key} must be a string or null, got {raw[key]!r}")
 
 
+def _check_sources(path: Path, raw: dict) -> None:
+    if "sources" not in raw:
+        return
+    where = f"{path}: entry {raw['id']} field sources"
+    src = raw["sources"]
+    if not isinstance(src, list):
+        raise ValueError(f"{where} must be a list of {{name, url}}, got {src!r}")
+    for item in src:
+        if (not isinstance(item, dict) or set(item) != {"name", "url"}
+                or not isinstance(item["name"], str) or not item["name"].strip()
+                or not isinstance(item["url"], str) or not item["url"].startswith("http")):
+            raise ValueError(f"{where} items must be {{name: non-empty string, url: http(s) URL}}, got {item!r}")
+
+
 def load_curated(path: Path) -> dict[str, CuratedEntry]:
     path = Path(path)
     if not path.exists():
@@ -50,6 +66,7 @@ def load_curated(path: Path) -> dict[str, CuratedEntry]:
         if unknown:
             raise ValueError(f"{path}: entry {raw['id']} has unknown keys {sorted(unknown)}")
         _check_types(path, raw)
+        _check_sources(path, raw)
         entry = CuratedEntry(**{**raw, "id": str(raw["id"])})
         if entry.id in out:
             raise ValueError(f"{path}: duplicate id {entry.id}")
