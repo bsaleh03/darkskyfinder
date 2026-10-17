@@ -31,7 +31,7 @@ export function errorMessage(e: ApiError): string {
     case 'rate_limited':
       return 'Too many searches — try again in a minute.'
     case 'night_out_of_range':
-      return 'Forecasts only cover the next few nights. Pick a closer date.'
+      return 'Forecasts cover tonight and the next 6 nights � pick one of those.'
     case 'invalid':
       return 'That search didn’t look right. Check the location and try again.'
     default:
@@ -39,10 +39,11 @@ export function errorMessage(e: ApiError): string {
   }
 }
 
-async function readJson(res: Response): Promise<unknown> {
+async function readJson(res: Response, signal?: AbortSignal): Promise<unknown> {
   try {
     return await res.json()
-  } catch {
+  } catch (e) {
+    if (signal?.aborted || (e as { name?: string } | null)?.name === 'AbortError') throw e
     return undefined
   }
 }
@@ -51,12 +52,12 @@ async function request<T>(path: string, query?: URLSearchParams, signal?: AbortS
   const qs = query && [...query].length ? `?${query.toString()}` : ''
   let res: Response
   try {
-    res = await fetch(`${config.apiUrl}${path}${qs}`, { signal })
+    res = await fetch(`${config.apiUrl.replace(/\/+$/, '')}${path}${qs}`, { signal })
   } catch (e) {
     if (e instanceof TypeError) throw new ApiError('network', undefined, e)
     throw e
   }
-  const body = await readJson(res)
+  const body = await readJson(res, signal)
   if (res.ok) {
     if (body === undefined) throw new ApiError('server', res.status)
     return body as T

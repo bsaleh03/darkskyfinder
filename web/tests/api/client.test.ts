@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, errorMessage, fetchHealth, fetchRegions, fetchSearch, fetchSpots } from '../../src/api/client'
+import { config } from '../../src/config'
 import type { SpotsParams } from '../../src/api/types'
 
 const params: SpotsParams = { lat: 42.3, lon: -83.1, drive: 90, sort: 'relevant', access: 'all', border: 'include', limit: 25 }
@@ -96,11 +97,31 @@ describe('api client', () => {
     await expect(fetchSpots(params)).rejects.toBe(abort)
   })
 
+  it('rethrows an abort raised while reading the body', async () => {
+    const abort = new DOMException('aborted', 'AbortError')
+    const ac = new AbortController()
+    ac.abort()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.reject(abort) }))
+    await expect(fetchSpots(params, ac.signal)).rejects.toBe(abort)
+  })
+
+  it('strips trailing slashes from the base url', async () => {
+    const orig = config.apiUrl
+    config.apiUrl = 'http://x.test///'
+    try {
+      const f = mockFetch(200, [])
+      await fetchRegions()
+      expect(f.mock.calls[0][0]).toBe('http://x.test/api/regions')
+    } finally {
+      config.apiUrl = orig
+    }
+  })
+
   it('errorMessage copy', () => {
     const m = (kind: ApiError['kind']) => errorMessage(new ApiError(kind))
     expect(m('out_of_coverage')).toBe('We cover SE Michigan and the SF Bay Area so far.')
     expect(m('rate_limited')).toBe('Too many searches — try again in a minute.')
-    expect(m('night_out_of_range')).toBe('Forecasts only cover the next few nights. Pick a closer date.')
+    expect(m('night_out_of_range')).toBe('Forecasts cover tonight and the next 6 nights � pick one of those.')
     expect(m('invalid')).toBe('That search didn’t look right. Check the location and try again.')
     expect(m('server')).toBe('Something went wrong. Check your connection and try again.')
     expect(m('network')).toBe('Something went wrong. Check your connection and try again.')
