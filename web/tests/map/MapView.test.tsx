@@ -8,6 +8,7 @@ const h = vi.hoisted(() => {
   const state = {
     mapHandlers: {} as Record<string, ((e?: unknown) => void)[]>,
     styleLoaded: true,
+    layersPresent: true,
     map: null as any,
     marker: null as any,
     sourceSetData: null as any,
@@ -29,7 +30,7 @@ function makeMap() {
     remove: vi.fn(),
     addSource: vi.fn(),
     addLayer: vi.fn(),
-    getLayer: vi.fn(() => undefined),
+    getLayer: vi.fn((id: string) => (s.layersPresent && id.startsWith('glow-') ? {} : undefined)),
     getSource: vi.fn(() => ({ setData: s.sourceSetData })),
     getStyle: vi.fn(() => ({ layers: [{ id: 'glow-se_mi' }, { id: 'land-se_mi' }] })),
     isStyleLoaded: vi.fn(() => s.styleLoaded),
@@ -86,6 +87,7 @@ afterEach(cleanup)
 beforeEach(() => {
   vi.clearAllMocks()
   h.state.styleLoaded = true
+  h.state.layersPresent = true
   base = {
     spots: [], start: null, selectedId: null, glow: true, red: false,
     regions: [region('se_mi', [-84, 41, -82, 43])],
@@ -134,15 +136,35 @@ test('spots and selection changes call setData, never setStyle', () => {
   expect(h.state.map.setStyle).not.toHaveBeenCalled()
 })
 
-test('glow-only change sets layer visibility, not setStyle; deferred until style loaded', () => {
+test('glow-only change applies even when isStyleLoaded is false but layers exist', () => {
+  const { rerender } = render(<MapView {...base} />)
+  h.state.styleLoaded = false
+  rerender(<MapView {...base} glow={false} />)
+  expect(h.state.map.setLayoutProperty).toHaveBeenCalledWith('glow-se_mi', 'visibility', 'none')
+})
+
+test('unmount cancels the pending dragend timer', () => {
+  vi.useFakeTimers()
+  try {
+    const { unmount } = render(<MapView {...base} start={{ lat: 1, lon: 2 }} />)
+    act(() => h.state.marker.handlers.dragend())
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('glow-only change sets layer visibility, not setStyle; deferred until layers exist', () => {
   const { rerender } = render(<MapView {...base} />)
   rerender(<MapView {...base} glow={false} />)
   expect(h.state.map.setStyle).not.toHaveBeenCalled()
   expect(h.state.map.setLayoutProperty).toHaveBeenCalledTimes(1)
   expect(h.state.map.setLayoutProperty).toHaveBeenCalledWith('glow-se_mi', 'visibility', 'none')
-  h.state.styleLoaded = false
+  h.state.layersPresent = false
   rerender(<MapView {...base} glow />)
   expect(h.state.map.setLayoutProperty).toHaveBeenCalledTimes(1)
+  h.state.layersPresent = true
   fire('style.load') // applies current glow state
   expect(h.state.map.setLayoutProperty).toHaveBeenLastCalledWith('glow-se_mi', 'visibility', 'visible')
 })

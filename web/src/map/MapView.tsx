@@ -38,8 +38,8 @@ function registerPmtiles() {
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 const isCoarse = () => window.matchMedia?.('(pointer: coarse)').matches ?? false
 function applyGlow(map: MlMap, glow: boolean) {
-  for (const l of map.getStyle().layers) {
-    if (l.id.startsWith('glow-')) map.setLayoutProperty(l.id, 'visibility', glow ? 'visible' : 'none')
+  for (const l of map.getStyle()?.layers ?? []) {
+    if (l.id.startsWith('glow-') && map.getLayer(l.id)) map.setLayoutProperty(l.id, 'visibility', glow ? 'visible' : 'none')
   }
 }
 const metroList = (metros: string) => (metros ? metros.split(',') : [])
@@ -76,6 +76,7 @@ export function MapView(props: MapViewProps) {
   const markerRef = useRef<Marker | null>(null)
   const prevStyle = useRef<{ glow: boolean; red: boolean; metros: string }>()
   const justDragged = useRef(false)
+  const dragTimer = useRef<ReturnType<typeof setTimeout>>()
   const yesRef = useRef<HTMLButtonElement>(null)
   const latest = useRef(props)
   latest.current = props
@@ -114,6 +115,7 @@ export function MapView(props: MapViewProps) {
     map.on('mousemove', 'spots-pin', () => { map.getCanvas().style.cursor = 'pointer' })
     map.on('mouseleave', 'spots-pin', () => { map.getCanvas().style.cursor = '' })
     return () => {
+      clearTimeout(dragTimer.current)
       markerRef.current?.remove()
       markerRef.current = null
       map.remove()
@@ -133,7 +135,7 @@ export function MapView(props: MapViewProps) {
     if (change === 'restyle') {
       map.setStyle(buildStyle({ tilesUrl: config.tilesUrl, metros: metroList(metros), glow, red }), { diff: false })
     } else if (change === 'glow') {
-      if (map.isStyleLoaded()) applyGlow(map, glow) // otherwise style.load applies it
+      applyGlow(map, glow) // layers not created yet are covered by style.load
     }
   }, [glow, red, metros])
 
@@ -157,7 +159,8 @@ export function MapView(props: MapViewProps) {
       m.getElement().setAttribute('aria-label', 'Your starting point (drag to move)')
       m.on('dragend', () => {
         justDragged.current = true
-        setTimeout(() => { justDragged.current = false }, 0)
+        clearTimeout(dragTimer.current)
+        dragTimer.current = setTimeout(() => { justDragged.current = false }, 0)
         const ll = m.getLngLat()
         latest.current.onSetStart({ lat: ll.lat, lon: ll.lng })
       })
