@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -12,7 +12,10 @@ let server: http.Server
 let base: string
 
 beforeAll(async () => {
-  const root = mkdtempSync(join(tmpdir(), 'devtiles-'))
+  const parent = mkdtempSync(join(tmpdir(), 'devtiles-'))
+  const root = join(parent, 'root')
+  mkdirSync(root)
+  writeFileSync(join(parent, 'secret.txt'), 'top secret')
   writeFileSync(join(root, 'a.pmtiles'), DATA)
   const mw = devtilesMiddleware(root)
   server = http.createServer((req, res) => mw(req, res, () => { res.statusCode = 404; res.end('next') }))
@@ -71,8 +74,12 @@ test('HEAD returns headers without body', async () => {
 })
 
 test('404 outside root (path traversal ../ rejected)', async () => {
-  expect((await get('/%2e%2e/%2e%2e/package.json')).status).toBe(404)
-  expect((await get('/..%2fpackage.json')).status).toBe(404)
+  // secret.txt really exists in the parent of the served root
+  for (const p of ['/%2e%2e/secret.txt', '/..%2fsecret.txt', '/..%5csecret.txt', '/../secret.txt']) {
+    const r = await get(p)
+    expect(r.status, p).toBe(404)
+    expect(r.body.toString()).not.toContain('top secret')
+  }
 })
 
 test('404 for missing file', async () => {

@@ -1,6 +1,7 @@
 import { createReadStream, statSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { resolve, sep } from 'node:path'
+import { pipeline } from 'node:stream'
 
 type Next = (err?: unknown) => void
 
@@ -69,6 +70,6 @@ export function devtilesMiddleware(root: string) {
       res.setHeader('Content-Length', size)
     }
     if (req.method === 'HEAD') return res.end()
-    createReadStream(file, opts).on('error', () => res.destroy()).pipe(res)
+    pipeline(createReadStream(file, opts), res, () => {})
   }
 }

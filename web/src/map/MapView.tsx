@@ -7,7 +7,7 @@ import { config } from '../config'
 import { toRed } from './color'
 import { regionBounds, styleChange, unionBounds } from './helpers'
 import './MapView.css'
-import { spotsToGeoJSON } from './pins'
+import { PIN_COLORS, spotsToGeoJSON } from './pins'
 import { buildStyle } from './style'
 
 export interface MapViewProps {
@@ -25,7 +25,6 @@ export interface MapViewProps {
 
 const SRC = 'spots'
 const PIN_LAYERS = ['spots-ring', 'spots-pin']
-const PIN_COLORS = ['#7FD6A0', '#F0C070', '#F0A070', '#F0808A', '#5A6280']
 const AMBER = '#F5C96B'
 const VIOLET = '#A58BE0'
 
@@ -38,6 +37,11 @@ function registerPmtiles() {
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 const isCoarse = () => window.matchMedia?.('(pointer: coarse)').matches ?? false
+function applyGlow(map: MlMap, glow: boolean) {
+  for (const l of map.getStyle().layers) {
+    if (l.id.startsWith('glow-')) map.setLayoutProperty(l.id, 'visibility', glow ? 'visible' : 'none')
+  }
+}
 const metroList = (metros: string) => (metros ? metros.split(',') : [])
 
 function addPins(map: MlMap, data: GeoJSON.FeatureCollection, red: boolean) {
@@ -71,6 +75,8 @@ export function MapView(props: MapViewProps) {
   const mapRef = useRef<MlMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
   const prevStyle = useRef<{ glow: boolean; red: boolean; metros: string }>()
+  const justDragged = useRef(false)
+  const yesRef = useRef<HTMLButtonElement>(null)
   const latest = useRef(props)
   latest.current = props
   const [pending, setPending] = useState<{ lat: number; lon: number } | null>(null)
@@ -93,8 +99,11 @@ export function MapView(props: MapViewProps) {
     map.on('style.load', () => {
       const p = latest.current
       addPins(map, spotsToGeoJSON(p.spots, p.selectedId), p.red)
+      applyGlow(map, p.glow)
     })
     map.on('click', (e) => {
+      const target = e.originalEvent?.target
+      if (justDragged.current || (target instanceof Node && markerRef.current?.getElement().contains(target))) return
       const layers = PIN_LAYERS.filter((l) => map.getLayer(l))
       const hit = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined
       if (hit) return latest.current.onSelect(String(hit.properties?.id))
@@ -124,9 +133,7 @@ export function MapView(props: MapViewProps) {
     if (change === 'restyle') {
       map.setStyle(buildStyle({ tilesUrl: config.tilesUrl, metros: metroList(metros), glow, red }), { diff: false })
     } else if (change === 'glow') {
-      for (const l of map.getStyle().layers) {
-        if (l.id.startsWith('glow-')) map.setLayoutProperty(l.id, 'visibility', glow ? 'visible' : 'none')
-      }
+      if (map.isStyleLoaded()) applyGlow(map, glow) // otherwise style.load applies it
     }
   }, [glow, red, metros])
 
@@ -149,6 +156,8 @@ export function MapView(props: MapViewProps) {
       const m = new maplibregl.Marker({ draggable: true, color: AMBER }).setLngLat([start.lon, start.lat]).addTo(map)
       m.getElement().setAttribute('aria-label', 'Your starting point (drag to move)')
       m.on('dragend', () => {
+        justDragged.current = true
+        setTimeout(() => { justDragged.current = false }, 0)
         const ll = m.getLngLat()
         latest.current.onSetStart({ lat: ll.lat, lon: ll.lng })
       })
@@ -168,13 +177,23 @@ export function MapView(props: MapViewProps) {
   }, [selectedKey])
 
   // Fit the focused region, or all regions when none is focused.
-  const region = regions.find((r) => r.key === focusRegion)
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const b = region ? regionBounds(region) : unionBounds(latest.current.regions)
+    const rs = latest.current.regions
+    const region = rs.find((r) => r.key === focusRegion)
+    const b = region ? regionBounds(region) : unionBounds(rs)
     if (b) map.fitBounds(b, { padding: 40, duration: reducedMotion() || !region ? 0 : 1200 })
-  }, [region, metros])
+  }, [focusRegion, metros])
+
+  // Toast: focus Yes on open, Escape cancels.
+  useEffect(() => {
+    if (!pending) return
+    yesRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPending(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [pending])
 
   return (
     <div className="map-view">
@@ -185,7 +204,7 @@ export function MapView(props: MapViewProps) {
       {pending && (
         <div className="map-toast" role="alertdialog" aria-label="Confirm start location">
           <span>Set start here?</span>
-          <button type="button" onClick={() => { props.onSetStart(pending); setPending(null) }}>Yes</button>
+          <button type="button" ref={yesRef} onClick={() => { props.onSetStart(pending); setPending(null) }}>Yes</button>
           <button type="button" onClick={() => setPending(null)}>Cancel</button>
         </div>
       )}

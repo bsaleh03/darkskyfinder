@@ -8,6 +8,8 @@ const BY_LABEL: Record<string, string> = {
   'not visible': '#F0808A',
 }
 
+export const PIN_COLORS = [UNAVAILABLE, ...Object.values(BY_LABEL)]
+
 export function spotsToGeoJSON(spots: Spot[], selectedId: string | null): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
