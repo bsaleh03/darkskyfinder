@@ -79,7 +79,7 @@ Loading → skeleton cards. API slow > 3 s → WakingUp ("Waking up the stargazi
 - **Moonlit map style** (built in `style.ts` from Overture PMTiles; source-layers verified in the release files):
   - Sources: `base` (layers `land`, `land_cover`, `land_use`, `water`, `bathymetry`, `infrastructure`; z0–13), `transportation` (`segment`, `connector`; z4–14), `buildings` (`building`, `building_part`; z5–14), `divisions` (`division`, `division_area`, `division_boundary`; z0–12), `glow` (raster PNG z6–11, our light pollution).
   - Background/land `#141A2E`; water `#0C1734`; parks/protected (`land_use` park/protected/recreation) `#18302A`; land_cover forest a hair darker than land; buildings `#1B2238` (z≥13, no outlines); roads: motorway/trunk `#59658F` 1.2→3 px, primary/secondary `#3D4870`, minor `#2C3552` (z≥11); boundaries `#3A4466` dashed; labels (division names, major roads) `#9AA6C8` with `#0B0F2A` halo, Manrope 11–13 px; glow raster opacity 0.55 (toggleable) placed below roads/labels.
-  - Red style: same layers, all colors mapped to dark reds / black; glow raster hidden by default in red mode (user can toggle).
+  - Red style: same layers, all colors mapped to dark reds / black; glow raster always hidden in red mode (its greyscale ramp would emit white light); the glow toggle is disabled with an explanation while red mode is on, and the user's glow setting returns when red mode is turned off. (Amended 2026-10-17 by final-review ruling.)
 - **Pattern visuals:** starfield and horizon silhouette SVGs behind the header; SkyPreview renders N deterministic stars where N scales with `sqm` (18 → ~6, 22 → ~120) plus a faint Milky Way band above `sqm` 21.
 
 ## 7. Accessibility & resilience
