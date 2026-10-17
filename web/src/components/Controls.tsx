@@ -28,6 +28,7 @@ interface SegProps<T extends string> {
 }
 
 function Segmented<T extends string>({ label, value, options, onSelect }: SegProps<T>): ReactNode {
+  const hasMatch = options.some((o) => o.value === value)
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const n = options.length
     let next: number
@@ -49,7 +50,7 @@ function Segmented<T extends string>({ label, value, options, onSelect }: SegPro
           type="button"
           role="radio"
           aria-checked={value === o.value}
-          tabIndex={value === o.value ? 0 : -1}
+          tabIndex={value === o.value || (!hasMatch && i === 0) ? 0 : -1}
           className="ctl-btn seg-btn"
           onClick={() => onSelect(o.value)}
           onKeyDown={(e) => onKeyDown(e, i)}

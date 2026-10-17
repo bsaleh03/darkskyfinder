@@ -101,4 +101,23 @@ describe('Controls', () => {
     expect(onChange).toHaveBeenLastCalledWith({ access: 'likely' })
     expect(screen.getByRole('radio', { name: 'Likely open' })).toHaveFocus()
   })
+
+  it('access group stays tabbable when value is hidden', () => {
+    setup({ access: 'verified' }, 'se_mi', false)
+    const group = screen.getByRole('radiogroup', { name: 'Access' })
+    const tabbable = Array.from(group.querySelectorAll('[role="radio"]')).filter(
+      (b) => (b as HTMLElement).tabIndex === 0,
+    )
+    expect(tabbable).toHaveLength(1)
+    expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('tabindex', '0')
+  })
+
+  it('slider clamps edge values', () => {
+    const onChange = setup()
+    const slider = screen.getByRole('slider')
+    fireEvent.change(slider, { target: { value: '20' } })
+    expect(onChange).toHaveBeenLastCalledWith({ drive: 30 })
+    fireEvent.change(slider, { target: { value: '200' } })
+    expect(onChange).toHaveBeenLastCalledWith({ drive: 180 })
+  })
 })
