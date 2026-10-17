@@ -1,4 +1,5 @@
 import type { Verdict } from '../api/types'
+import { fmtTime as fmt } from './time'
 import './VerdictCard.css'
 
 interface Props {
@@ -6,10 +7,6 @@ interface Props {
   forecastStatus: string
   driveStatus: string
   timezone: string
-}
-
-function fmt(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone }).format(new Date(iso))
 }
 
 export function VerdictCard({ verdict, forecastStatus, driveStatus, timezone }: Props) {
