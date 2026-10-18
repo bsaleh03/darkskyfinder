@@ -29,6 +29,20 @@
   pointer-events: none;
 }
 
+/* A tile of a sharper level over the whole picture: placed (left/top/width/height) per tile, faded in once loaded. */
+.static-map-tile {
+  position: absolute;
+  display: block;
+  opacity: 0;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.static-map-tile--loaded {
+  opacity: 1;
+}
+
 .static-map-label,
 .static-map-start,
 .static-map-pin {
@@ -223,7 +237,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .static-map-image {
+  .static-map-image,
+  .static-map-tile {
     transition: none;
   }
 }

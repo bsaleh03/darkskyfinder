@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { chooseWidth, fitBox, frameView } from '../../src/map/framing'
+import { chooseLevel, chooseWidth, fitBox, frameView, visibleTiles } from '../../src/map/framing'
 import { toFraction } from '../../src/map/projection'
 
 const B: [number, number, number, number] = [-86.9, 41.65, -82.4, 45.9]
@@ -55,4 +55,43 @@ test('chooseWidth picks smallest sufficient width, else largest', () => {
   expect(chooseWidth([875, 1750, 3500], 400, 2)).toBe(875)
   expect(chooseWidth([875, 1750, 3500], 600, 2)).toBe(1750)
   expect(chooseWidth([875, 1750, 3500], 3000, 3)).toBe(3500)
+})
+
+const LEVELS = [
+  { level: 0, cols: 1, rows: 1 },
+  { level: 1, cols: 2, rows: 2 },
+]
+
+test('chooseLevel: smallest level whose full width covers the picture at the device pixel ratio, else the highest', () => {
+  expect(chooseLevel(LEVELS, 3496, 1000, 2)).toBe(0) // 2000 device px <= 3496
+  expect(chooseLevel(LEVELS, 3496, 3496, 1)).toBe(0) // exactly the level-0 full width
+  expect(chooseLevel(LEVELS, 3496, 3497, 1)).toBe(1)
+  expect(chooseLevel(LEVELS, 3496, 1749, 2)).toBe(1) // 3498 device px
+  expect(chooseLevel(LEVELS, 3496, 4000, 2)).toBe(1) // past level 1 (6992): the highest there is
+  expect(chooseLevel([...LEVELS].reverse(), 3496, 2000, 2)).toBe(1) // order of the list does not matter
+  expect(chooseLevel([LEVELS[0]], 3496, 9000, 3)).toBe(0) // a level-0-only (v1) picture
+})
+
+test('visibleTiles: the tiles a centered view touches are all four', () => {
+  expect(visibleTiles(1, 2, 2, { x0: 0.4, y0: 0.4, x1: 0.6, y1: 0.6 })).toEqual([
+    { col: 0, row: 0 },
+    { col: 1, row: 0 },
+    { col: 0, row: 1 },
+    { col: 1, row: 1 },
+  ])
+})
+
+test('visibleTiles: a corner view touches only its corner tile; a shared edge does not count', () => {
+  expect(visibleTiles(1, 2, 2, { x0: 0, y0: 0, x1: 0.3, y1: 0.3 })).toEqual([{ col: 0, row: 0 }])
+  expect(visibleTiles(1, 2, 2, { x0: 0.6, y0: 0.7, x1: 0.9, y1: 0.95 })).toEqual([{ col: 1, row: 1 }])
+  expect(visibleTiles(1, 2, 2, { x0: 0, y0: 0, x1: 0.5, y1: 0.5 })).toEqual([{ col: 0, row: 0 }])
+})
+
+test('visibleTiles: a view past the picture edges is clipped to the picture', () => {
+  expect(visibleTiles(1, 2, 2, { x0: -0.5, y0: -0.5, x1: 0.2, y1: 1.5 })).toEqual([
+    { col: 0, row: 0 },
+    { col: 0, row: 1 },
+  ])
+  expect(visibleTiles(1, 2, 2, { x0: 1.2, y0: 0.2, x1: 1.5, y1: 0.4 })).toEqual([])
+  expect(visibleTiles(0, 1, 1, { x0: -1, y0: -1, x1: 2, y1: 2 })).toEqual([{ col: 0, row: 0 }])
 })

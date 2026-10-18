@@ -16,5 +16,23 @@
     "glow": "glow_{w}.webp",
     "glow_red": "glow_red_{w}.webp"
   },
-  "labels": "labels.json"
+  "labels": "labels.json",
+  "levels": [
+    {
+      "level": 0,
+      "cols": 1,
+      "rows": 1
+    },
+    {
+      "level": 1,
+      "cols": 2,
+      "rows": 2
+    }
+  ],
+  "tiles": {
+    "base": "base_L{l}_{c}_{r}.webp",
+    "base_red": "base_red_L{l}_{c}_{r}.webp",
+    "glow": "glow_L{l}_{c}_{r}.webp",
+    "glow_red": "glow_red_L{l}_{c}_{r}.webp"
+  }
 }

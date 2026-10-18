@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { config } from '../config'
+import type { MapLevel } from './framing'
 import type { MapLabel } from './labels'
 import type { Bounds } from './projection'
 
@@ -15,7 +16,16 @@ export type MapManifest = {
   /** file name templates relative to the manifest, with {w} for the width */
   files: Record<MapFileKey, string>
   labels: string
+  /** v2: the levels (level 0 is the whole picture at `widths`; level l >= 1 is a grid of full-width tiles) */
+  levels?: MapLevel[]
+  /** v2: tile file name templates relative to the manifest, with {l}, {c} and {r} for level, column and row */
+  tiles?: Record<MapFileKey, string>
 }
+
+const LEVEL_0: MapLevel = { level: 0, cols: 1, rows: 1 }
+
+/** The picture's levels; a v1 manifest (no levels) is level 0 only. */
+export const mapLevels = (m: MapManifest): MapLevel[] => m.levels ?? [LEVEL_0]
 
 export type MapManifestState = {
   manifest: MapManifest | null
@@ -31,6 +41,13 @@ export function mapFileUrl(manifest: MapManifest, key: MapFileKey, width: number
   return new URL(manifest.files[key].replace('{w}', String(width)), base).href
 }
 
+/** Absolute URL of one tile of a level >= 1, resolved against the manifest's URL. */
+export function mapTileUrl(manifest: MapManifest, key: MapFileKey, level: number, col: number, row: number): string {
+  const base = new URL(manifestUrl(manifest.metro), window.location.href)
+  const name = manifest.tiles![key].replace('{l}', String(level)).replace('{c}', String(col)).replace('{r}', String(row))
+  return new URL(name, base).href
+}
+
 async function getJson(url: string, signal: AbortSignal): Promise<unknown> {
   const res = await fetch(url, { signal })
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`)
@@ -39,7 +56,24 @@ async function getJson(url: string, signal: AbortSignal): Promise<unknown> {
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
-function asManifest(v: unknown, metro: string): MapManifest {
+const KEYS = ['base', 'base_red', 'glow', 'glow_red'] as const
+const isCount = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0
+const isTemplates = (v: unknown): v is Record<MapFileKey, string> =>
+  typeof v === 'object' && v !== null && KEYS.every((k) => typeof (v as Record<string, unknown>)[k] === 'string')
+
+/** v2 additions: absent (v1, level 0 only), or levels with whole positive grids, and tile templates for level >= 1. */
+function levelsOk(m: Partial<MapManifest>): boolean {
+  if (m.levels === undefined) return m.tiles === undefined || isTemplates(m.tiles)
+  if (!Array.isArray(m.levels) || m.levels.length === 0) return false
+  const ok = m.levels.every(
+    (l) => l !== null && typeof l === 'object' && Number.isInteger(l.level) && l.level >= 0 && isCount(l.cols) && isCount(l.rows),
+  )
+  if (!ok || !m.levels.some((l) => l.level === 0)) return false
+  return m.levels.every((l) => l.level === 0) || isTemplates(m.tiles)
+}
+
+/** Validate the manifest of `metro` (v1, or v2 with levels and tiles). */
+export function parseManifest(v: unknown, metro: string): MapManifest {
   const m = v as Partial<MapManifest> | null
   const ok =
     m !== null &&
@@ -48,9 +82,9 @@ function asManifest(v: unknown, metro: string): MapManifest {
     Array.isArray(m.bounds) && m.bounds.length === 4 && m.bounds.every(isNum) &&
     isNum(m.aspect) && m.aspect > 0 &&
     Array.isArray(m.widths) && m.widths.length > 0 && m.widths.every((w) => isNum(w) && w > 0) &&
-    typeof m.files === 'object' && m.files !== null &&
-    (['base', 'base_red', 'glow', 'glow_red'] as const).every((k) => typeof m.files?.[k] === 'string') &&
-    typeof m.labels === 'string'
+    isTemplates(m.files) &&
+    typeof m.labels === 'string' &&
+    levelsOk(m)
   if (!ok) throw new Error(`bad map manifest for ${metro}`)
   return m as MapManifest
 }
@@ -66,7 +100,7 @@ function asLabels(v: unknown): MapLabel[] {
 export function useMapManifest(metro: string | null): MapManifestState {
   const m = useQuery({
     queryKey: ['map-manifest', metro],
-    queryFn: async ({ signal }) => asManifest(await getJson(manifestUrl(metro!), signal), metro!),
+    queryFn: async ({ signal }) => parseManifest(await getJson(manifestUrl(metro!), signal), metro!),
     enabled: metro !== null,
     staleTime: Infinity,
     retry: 1,

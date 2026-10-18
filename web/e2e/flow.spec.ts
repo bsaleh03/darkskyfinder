@@ -105,19 +105,37 @@ async function nonRedColors(page: Page): Promise<string[]> {
   })
 }
 
-/** srcs of the map pictures (base first, then glow when shown). */
+/** srcs of the whole map pictures (level-0 base first, then glow when shown). */
 const mapSrcs = (page: Page) =>
   page.locator('.static-map-picture').evaluateAll((imgs) => imgs.map((img) => (img as HTMLImageElement).src))
+/** srcs of the level >= 1 tiles laid over the level-0 base. */
+const tileSrcs = (page: Page) =>
+  page.locator('.static-map-tile').evaluateAll((imgs) => imgs.map((img) => (img as HTMLImageElement).src))
+/** Width (CSS px) of the whole picture as laid out, and the device pixel ratio. */
+const pictureWidth = (page: Page) =>
+  page.locator('.static-map-image').evaluate((el) => (el as HTMLElement).getBoundingClientRect().width * window.devicePixelRatio)
+/** Picture files (not the manifest or labels) requested since index `from` of `requested`. */
+const picturesSince = (requested: string[], from: number) => requested.slice(from).filter((u) => u.endsWith('.webp'))
 
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready)
   await expect(page.locator('main[aria-busy="true"]')).toHaveCount(0)
-  // Every map picture has finished decoding, so screenshots show the map, not the water color behind it.
+  // Every map picture has finished decoding, so screenshots show the map, not the water color behind it, and
+  // every level-1 tile has loaded and faded in.
   await expect
     .poll(() =>
       page
-        .locator('.static-map-picture')
-        .evaluateAll((imgs) => imgs.length > 0 && imgs.every((i) => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0)),
+        .locator('.static-map-picture, .static-map-tile')
+        .evaluateAll(
+          (imgs) =>
+            imgs.length > 0 &&
+            imgs.every(
+              (i) =>
+                (i as HTMLImageElement).complete &&
+                (i as HTMLImageElement).naturalWidth > 0 &&
+                (!i.classList.contains('static-map-tile') || i.classList.contains('static-map-tile--loaded')),
+            ),
+        ),
     )
     .toBe(true)
 }
@@ -131,6 +149,10 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   const tiles: { url: string; status: number }[] = []
   page.on('response', (res) => {
     if (res.url().includes('/e2e-tiles/')) tiles.push({ url: res.url(), status: res.status() })
+  })
+  const requested: string[] = []
+  page.on('request', (req) => {
+    if (req.url().includes('/e2e-tiles/')) requested.push(req.url())
   })
 
   await page.clock.setFixedTime(CAPTURED_AT)
@@ -155,7 +177,10 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   // The filter switches sit behind the collapsed More filters disclosure.
   await expect(page.getByRole('switch', { name: 'Crosses country border' })).toHaveCount(0)
 
-  // The map is the pre-rendered se_mi picture (the fixture manifest lists only the 1/4 width, 874 px).
+  // The map is the pre-rendered se_mi picture. The fixture manifest (v2) lists one level-0 width, 874 px, and
+  // level 1 as 2x2 tiles of 874 px each. On the desktop map the framing around Royal Oak is wider than 874 device
+  // px, so the visible level-1 tiles load over the full level-0 picture (still underneath); the phone's mini map
+  // is not, and stays at level 0. The glow is always the level-0 picture.
   const map = page.locator('.static-map')
   const base = map.locator('.static-map-picture').first()
   await expect(base).toHaveAttribute('src', /\/e2e-tiles\/maps\/se_mi\/base_874\.webp$/)
@@ -163,6 +188,17 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await expect(map.getByRole('img', { name: 'Your start' })).toBeVisible()
   await expect(map.getByText('Map unavailable right now')).toHaveCount(0)
   await settle(page)
+  const levelOne = await tileSrcs(page)
+  const sharpNeeded = (await pictureWidth(page)) > 874
+  if (testInfo.project.name === 'desktop') expect(sharpNeeded).toBe(true)
+  expect(levelOne.length > 0).toBe(sharpNeeded)
+  if (sharpNeeded) {
+    // Royal Oak is in the south-east quarter of the region.
+    expect(levelOne).toContainEqual(expect.stringMatching(/\/base_L1_1_1\.webp$/))
+  }
+  for (const src of levelOne) expect(src).toMatch(/\/e2e-tiles\/maps\/se_mi\/base_L1_[01]_[01]\.webp$/)
+  expect(await mapSrcs(page)).toEqual([expect.stringMatching(/\/base_874\.webp$/), expect.stringMatching(/\/glow_874\.webp$/)])
+  expect(requested.filter((u) => /\/glow(_red)?_L/.test(u))).toEqual([])
   // No horizontal page scroll at either width (night chips scroll inside their own row).
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
   await page.screenshot({ path: testInfo.outputPath('main-normal-full.png'), fullPage: true })
@@ -208,6 +244,8 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
 
   // Red mode tints the page; the glow stays on, drawn from the red pictures (URL setting untouched).
   const glowBtn = page.getByRole('button', { name: 'Light pollution glow' })
+  await settle(page)
+  const beforeRed = requested.length
   await page.getByRole('switch', { name: 'Red mode' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-red', 'true')
   await expect(glowBtn).toBeEnabled()
@@ -216,6 +254,14 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await settle(page)
   // Every map picture is a red variant (base_red + glow_red); the normal ones are gone.
   await expect.poll(() => mapSrcs(page)).toEqual([expect.stringMatching(/\/base_red_874\.webp$/), expect.stringMatching(/\/glow_red_874\.webp$/)])
+  // The level-1 tiles are red too, and red mode requested only red files.
+  const redTiles = await tileSrcs(page)
+  expect(redTiles.length > 0).toBe((await pictureWidth(page)) > 874)
+  if (testInfo.project.name === 'desktop') expect(redTiles.length).toBeGreaterThan(0)
+  for (const src of redTiles) expect(src).toMatch(/\/base_red_L1_[01]_[01]\.webp$/)
+  const redRequests = picturesSince(requested, beforeRed)
+  if (redTiles.length > 0) expect(redRequests).toContainEqual(expect.stringMatching(/\/base_red_L1_\d_\d\.webp$/))
+  for (const url of redRequests) expect(url).toContain('_red_')
   expect(await nonRedColors(page)).toEqual([])
   // Colour emoji (the Canada flag) cannot take a token colour; red mode tints them with a CSS filter.
   const flag = page.locator('.emoji').first()
@@ -248,11 +294,14 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   // Back in red mode with a card expanded, the card and the map chrome (pins, start, labels, buttons) stay red-only.
   await cards.first().getByRole('button', { expanded: false }).click()
   await expect(page).toHaveURL(/spot=/)
+  await settle(page)
+  const beforeRedAgain = requested.length
   await page.getByRole('switch', { name: 'Red mode' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-red', 'true')
   await expect(glowBtn).toHaveAttribute('aria-pressed', 'true')
   await settle(page)
-  for (const src of await mapSrcs(page)) expect(src).toContain('_red_')
+  for (const src of [...(await mapSrcs(page)), ...(await tileSrcs(page))]) expect(src).toContain('_red_')
+  for (const url of picturesSince(requested, beforeRedAgain)) expect(url).toContain('_red_')
   expect(await nonRedColors(page)).toEqual([])
 
   // Only the manifest, labels and pictures were fetched, all successfully.

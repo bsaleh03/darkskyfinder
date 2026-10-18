@@ -62,6 +62,39 @@ export function chooseWidth(widths: number[], imgW: number, dpr: number): number
   return sorted.find((w) => w >= need) ?? sorted[sorted.length - 1]
 }
 
+/** One level of the picture: a cols x rows grid of tiles, each the size of the full level-0 picture. */
+export type MapLevel = { level: number; cols: number; rows: number }
+
+/**
+ * The smallest level whose full width (fullWidth0 * 2^level) covers the picture's width in device pixels, else the
+ * highest level there is.
+ */
+export function chooseLevel(levels: MapLevel[], fullWidth0: number, imgW: number, dpr: number): number {
+  const sorted = levels.map((l) => l.level).sort((a, b) => a - b)
+  const need = imgW * dpr
+  return sorted.find((l) => fullWidth0 * 2 ** l >= need) ?? sorted[sorted.length - 1] ?? 0
+}
+
+/**
+ * The tiles (row by row, west to east) of a cols x rows grid that overlap the visible part of the picture,
+ * `viewBox` in picture fractions (it may reach past the picture; a shared edge alone does not count).
+ */
+export function visibleTiles(_level: number, cols: number, rows: number, viewBox: Box): { col: number; row: number }[] {
+  const x0 = Math.max(0, viewBox.x0)
+  const y0 = Math.max(0, viewBox.y0)
+  const x1 = Math.min(1, viewBox.x1)
+  const y1 = Math.min(1, viewBox.y1)
+  const out: { col: number; row: number }[] = []
+  if (x1 <= x0 || y1 <= y0) return out
+  for (let row = 0; row < rows; row++) {
+    if (!(y0 < (row + 1) / rows && y1 > row / rows)) continue
+    for (let col = 0; col < cols; col++) {
+      if (x0 < (col + 1) / cols && x1 > col / cols) out.push({ col, row })
+    }
+  }
+  return out
+}
+
 /** A point to keep in view (picture fraction) and the radius (CSS px) of its hit area. */
 export type Mark = { x: number; y: number; r: number }
 export type Fit = ReturnType<typeof fitBox>

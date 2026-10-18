@@ -1,11 +1,11 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Spot } from '../api/types'
 import { toRed } from './color'
-import { chooseWidth, fitClear, frameView, type Box, type Mark } from './framing'
+import { chooseLevel, chooseWidth, fitClear, frameView, visibleTiles, type Box, type Mark } from './framing'
 import { placeLabels, type ScreenBox } from './labels'
 import { pinColor } from './pins'
 import { toFraction, type LonLat } from './projection'
-import { mapFileUrl, useMapManifest } from './useMapManifest'
+import { mapFileUrl, mapLevels, mapTileUrl, useMapManifest } from './useMapManifest'
 import './StaticMap.css'
 
 export interface StaticMapProps {
@@ -105,9 +105,9 @@ function useViewSize() {
 }
 
 /**
- * The base picture of one variant (metro + normal/red; the parent keys it by that). A sharper file for the same
- * variant loads on top of the one on screen, which goes only once the new one has loaded: the picture never
- * blanks while it sharpens. A failed upgrade keeps the current picture; a failed current picture is reported.
+ * The whole picture (base or glow) of one variant (metro + normal/red; the parent keys it by that). A sharper file
+ * for the same variant loads on top of the one on screen, which goes only once the new one has loaded: the picture
+ * never blanks while it sharpens. A failed upgrade keeps the current picture; a failed current picture is reported.
  */
 function BasePicture({ src, onError }: { src: string; onError(src: string): void }) {
   const [shown, setShown] = useState(src)
@@ -132,6 +132,29 @@ function BasePicture({ src, onError }: { src: string; onError(src: string): void
     </>
   )
 }
+
+/**
+ * One tile of a level >= 1, laid over the level-0 picture at its place (fractions of the picture, so it rides
+ * along with the pins). Hidden until it has loaded, then faded in; a failed tile stays hidden (level 0 shows).
+ */
+function Tile({ src, col, row, cols, rows }: { src: string; col: number; row: number; cols: number; rows: number }) {
+  const [state, setState] = useState<'loading' | 'loaded' | 'failed'>('loading')
+  if (state === 'failed') return null
+  return (
+    <img
+      className={`static-map-tile${state === 'loaded' ? ' static-map-tile--loaded' : ''}`}
+      src={src}
+      alt=""
+      draggable={false}
+      style={{ left: pct(col / cols), top: pct(row / rows), width: pct(1 / cols), height: pct(1 / rows) }}
+      onLoad={() => setState('loaded')}
+      onError={() => setState('failed')}
+    />
+  )
+}
+
+/** What is asked of the files for one variant: the level-0 width, the level and the tiles ("col_row") so far. */
+type Detail = { variant: string; width: number; level: number; tiles: string[] }
 
 export function StaticMap(props: StaticMapProps) {
   const { metro, spots, start, selectedId, glow, red, driveMinutes, onSelect, onToggleGlow } = props
@@ -189,16 +212,40 @@ export function StaticMap(props: StaticMapProps) {
     return placeLabels(labels, toScreen, size.w, size.h, obstacles)
   }, [manifest, labels, fit, size, overlays, start, spots, selectedId])
 
-  // Width tier: never smaller than one already chosen for this metro and mode (a wider framing keeps the
-  // sharper file); a new metro or mode starts over.
+  // Width and level: never below what was already chosen for this metro and mode (a wider framing keeps the
+  // sharper picture and the tiles already shown), adding the tiles that come into view; a new metro or mode
+  // starts over.
   const variant = `${metro}|${red ? 'red' : 'normal'}`
-  const want = manifest && fit ? chooseWidth(manifest.widths, fit.imgW, window.devicePixelRatio || 1) : null
-  const [tier, setTier] = useState<{ variant: string; width: number } | null>(null)
-  if (want !== null && (tier?.variant !== variant || want > tier.width)) setTier({ variant, width: want })
-  const width = want === null ? null : tier?.variant === variant ? Math.max(tier.width, want) : want
+  const [detail, setDetail] = useState<Detail | null>(null)
+  let current: Detail | null = null
+  if (manifest && fit && size) {
+    const dpr = window.devicePixelRatio || 1
+    const levels = mapLevels(manifest)
+    const prev = detail?.variant === variant ? detail : null
+    const width = Math.max(prev?.width ?? 0, chooseWidth(manifest.widths, fit.imgW, dpr))
+    const level = Math.max(prev?.level ?? 0, chooseLevel(levels, Math.max(...manifest.widths), fit.imgW, dpr))
+    const grid = levels.find((l) => l.level === level)
+    const view: Box = {
+      x0: -fit.left / fit.imgW,
+      y0: -fit.top / fit.imgH,
+      x1: (size.w - fit.left) / fit.imgW,
+      y1: (size.h - fit.top) / fit.imgH,
+    }
+    const seen =
+      level >= 1 && grid && manifest.tiles
+        ? visibleTiles(level, grid.cols, grid.rows, view).map((t) => `${t.col}_${t.row}`)
+        : []
+    const kept = prev?.level === level ? prev.tiles : []
+    const tiles = [...kept, ...seen.filter((k) => !kept.includes(k))]
+    current = { variant, width, level, tiles }
+    if (!prev || prev.width !== width || prev.level !== level || prev.tiles.length !== tiles.length) setDetail(current)
+  }
+  const width = current?.width ?? null
   const baseSrc = manifest && width ? mapFileUrl(manifest, red ? 'base_red' : 'base', width) : null
-  // The glow grid is coarse (500 m): the smallest file carries all its detail, CSS scales it.
-  const glowSrc = manifest && fit ? mapFileUrl(manifest, red ? 'glow_red' : 'glow', Math.min(...manifest.widths)) : null
+  // The glow follows the base width; at level >= 1 it stays at the level-0 full width (its source data is coarser
+  // than that, so tiles would only cost bytes).
+  const glowSrc = manifest && width ? mapFileUrl(manifest, red ? 'glow_red' : 'glow', width) : null
+  const grid = manifest && current ? mapLevels(manifest).find((l) => l.level === current.level) : undefined
 
   // A failed picture shows the unavailable state until the file, the region or the start changes (a retry).
   const [broken, setBroken] = useState<{ src: string; at: string } | null>(null)
@@ -235,15 +282,22 @@ export function StaticMap(props: StaticMapProps) {
               {/* Keyed by variant: switching mode (e.g. red) mounts fresh images, so the previous picture never
                   stays on screen while the new one downloads; the water color shows instead. */}
               <BasePicture key={`${variant}|base`} src={baseSrc} onError={(src) => setBroken({ src, at })} />
+              {grid &&
+                current!.tiles.map((k) => {
+                  const [col, row] = k.split('_').map(Number)
+                  return (
+                    <Tile
+                      key={`${variant}|L${grid.level}|${k}`}
+                      src={mapTileUrl(manifest, red ? 'base_red' : 'base', grid.level, col, row)}
+                      col={col}
+                      row={row}
+                      cols={grid.cols}
+                      rows={grid.rows}
+                    />
+                  )
+                })}
               {glowOn && glowSrc && (
-                <img
-                  key={`${variant}|glow`}
-                  className="static-map-picture"
-                  src={glowSrc}
-                  alt=""
-                  draggable={false}
-                  onError={() => setGlowFailed(glowSrc)}
-                />
+                <BasePicture key={`${variant}|glow`} src={glowSrc} onError={() => setGlowFailed(glowSrc)} />
               )}
               {placed.map(({ label }) => (
                 <span
