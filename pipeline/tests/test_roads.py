@@ -164,26 +164,61 @@ def _lonlat_of(projector, pt_xy):
     return projector.to_lonlat(pt_xy[0], pt_xy[1])
 
 
+def _xy(projector, lon, lat):
+    x, y = projector.to_xy(np.array([lon]), np.array([lat]))
+    return float(x[0]), float(y[0])
+
+
 def test_entry_prefers_parking(projector):
     net = build_road_network(_segments([("primary", "LINESTRING(-84.335 41.908, -84.305 41.908)")]), projector)
     area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
     px, py = projector.to_xy(np.array([-84.32]), np.array([41.9115]))
     parking = np.column_stack([px, py])
-    lon, lat = find_entry(area, net, parking, projector)
+    lon, lat = find_entry(area, net, parking, projector, _xy(projector, -84.32, 41.905))
     assert abs(lon + 84.32) < 1e-5 and abs(lat - 41.9115) < 1e-5
 
 
-def test_entry_prefers_higher_class_road(projector):
-    # residential touches the area's edge; the tertiary road is farther but a higher class
+def test_entry_parking_nearest_to_viewing_point(projector):
+    # three lots inside the area; the viewing point sits near the east one
+    net = build_road_network(_segments([("primary", "LINESTRING(-84.335 41.908, -84.305 41.908)")]), projector)
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    px, py = projector.to_xy(np.array([-84.328, -84.32, -84.312]), np.array([41.9115, 41.9, 41.905]))
+    parking = np.column_stack([px, py])
+    lon, lat = find_entry(area, net, parking, projector, _xy(projector, -84.3125, 41.906))
+    assert abs(lon + 84.312) < 1e-5 and abs(lat - 41.905) < 1e-5
+
+
+def test_entry_parking_far_from_viewing_point_falls_to_road(projector):
+    # the only lot is ~2.2 km from the viewing point (> ENTRY_PARKING_MAX_KM) -> nearest road point instead
+    net = build_road_network(_segments([("residential", "LINESTRING(-84.335 41.8885, -84.305 41.8885)")]), projector)
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    px, py = projector.to_xy(np.array([-84.32]), np.array([41.9105]))
+    parking = np.column_stack([px, py])
+    lon, lat = find_entry(area, net, parking, projector, _xy(projector, -84.32, 41.891))
+    assert abs(lat - 41.8885) < 1e-4
+    assert abs(lon + 84.32) < 1e-3
+
+
+def test_entry_near_road_beats_far_side_primary(projector):
+    # primary along the far (south) side; residential next to the viewing point on the north side
     net = build_road_network(_segments([
+        ("primary", "LINESTRING(-84.335 41.8885, -84.305 41.8885)"),
         ("residential", "LINESTRING(-84.335 41.9105, -84.305 41.9105)"),
-        ("tertiary", "LINESTRING(-84.335 41.912, -84.305 41.912)"),
-        ("service", "LINESTRING(-84.335 41.9101, -84.305 41.9101)"),
+        ("service", "LINESTRING(-84.335 41.9085, -84.305 41.9085)"),
     ]), projector)
     area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
-    lon, lat = find_entry(area, net, np.empty((0, 2)), projector)
-    assert abs(lat - 41.912) < 1e-4
-    assert -84.331 < lon < -84.309
+    lon, lat = find_entry(area, net, np.empty((0, 2)), projector, _xy(projector, -84.32, 41.908))
+    assert abs(lat - 41.9105) < 1e-4
+    assert abs(lon + 84.32) < 1e-3
+
+
+def test_entry_ignores_road_of_distant_area_part(projector):
+    # multi-part area: the viewing point is in the west part; the only road serves the east part (~8 km away)
+    west = _box_xy(projector, -84.33, 41.89, -84.32, 41.90)
+    east = _box_xy(projector, -84.23, 41.89, -84.22, 41.90)
+    area = shapely.MultiPolygon([west, east])
+    net = build_road_network(_segments([("primary", "LINESTRING(-84.235 41.9015, -84.215 41.9015)")]), projector)
+    assert find_entry(area, net, np.empty((0, 2)), projector, _xy(projector, -84.325, 41.895)) is None
 
 
 def test_entry_none_when_only_tracks(projector):
@@ -193,4 +228,4 @@ def test_entry_none_when_only_tracks(projector):
         ("motorway", "LINESTRING(-84.335 41.907, -84.305 41.907)"),
     ]), projector)
     area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
-    assert find_entry(area, net, np.empty((0, 2)), projector) is None
+    assert find_entry(area, net, np.empty((0, 2)), projector, _xy(projector, -84.32, 41.905)) is None

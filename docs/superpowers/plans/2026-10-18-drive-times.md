@@ -4,7 +4,7 @@
 
 **Goal:** Drive times match what people see in Google Maps: route to each spot's entrance (not its darkest interior point) and calibrate the router's times.
 
-**Architecture:** The pipeline records an `entry` point per spot (a parking place in the spot's access zone, else the best public paved road point next to it). The API routes to `entry` (falling back to the spot point), multiplies OpenRouteService durations by a calibrated factor, and uses a faster fallback estimate; it returns `entry` so Directions go there too.
+**Architecture:** The pipeline records an `entry` point per spot (a parking place in the spot's access zone near the viewing point, else the public paved road point nearest the viewing point). The API routes to `entry` (falling back to the spot point), multiplies OpenRouteService durations by a calibrated factor, and uses a faster fallback estimate; it returns `entry` so Directions go there too.
 
 **Tech Stack:** Python pipeline (shapely), FastAPI, React/TS.
 
@@ -14,7 +14,7 @@
 - `ROUTE_TIME_FACTOR = 0.8` applied to every ORS duration (comment the calibration samples above next to it).
 - Fallback estimate: `FALLBACK_ROAD_FACTOR = 1.35`, `FALLBACK_SPEED_KMH = 95` (Google's samples ≈ 70 km/h straight-line).
 - Spot field `entry`: `{"lon": float, "lat": float}` or `null`; spots/API schema version 5.
-- Entry choice: parking places within `ACCESS_SEARCH_M` of the spot area first (nearest to the area); otherwise points on paved, non-highway roads of class primary/secondary/tertiary/residential/unclassified (never `service` or `track`) within `ACCESS_SEARCH_M` of the area, choosing the highest class, ties → nearest to the area; none → `null`.
+- Entry choice (anchored on the viewing point): parking places within `ACCESS_SEARCH_M` of the spot area and within `ENTRY_PARKING_MAX_KM` (1.5 km) of the viewing point first, the one nearest the viewing point; otherwise points on paved, non-highway roads of class primary/secondary/tertiary/residential/unclassified (never `service` or `track`) within `ACCESS_SEARCH_M` of the area and within `ENTRY_ROAD_MAX_KM` (3 km) of the viewing point, the point nearest the viewing point (class does not outrank distance); none → `null` (routing/directions use the viewing point).
 - The darkness/viewing point (`lat`/`lon`, sqm, etc.) is unchanged.
 - Directions link uses `entry` when present, else the spot point.
 - Never open or print `api/.env`; a demo API/web run on ports 8000/5173 (don't stop them).
@@ -27,8 +27,8 @@
 ---
 
 ### Task 1: Pipeline: spot entrance point, schema 5
-**Files:** `pipeline/darksky_pipeline/roads.py` (`find_entry(area, roads, parking_xy, projector, region=None) -> tuple[float, float] | None` returning lon/lat), `build.py` (set `s["entry"]`), `assemble.py` (SCHEMA_VERSION = 5; keep `entry` in output), tests.
-- [ ] Failing tests: `entry_prefers_parking`, `entry_prefers_higher_class_road`, `entry_none_when_only_tracks` (service/track only → None), assembled spots have `entry` and schema 5.
+**Files:** `pipeline/darksky_pipeline/roads.py` (`find_entry(area, roads, parking_xy, projector, vp_xy, region=None) -> tuple[float, float] | None` returning lon/lat), `build.py` (set `s["entry"]`), `assemble.py` (SCHEMA_VERSION = 5; keep `entry` in output), tests.
+- [ ] Failing tests: `entry_prefers_parking`, `entry_parking_nearest_to_viewing_point`, `entry_parking_far_from_viewing_point_falls_to_road`, `entry_near_road_beats_far_side_primary`, `entry_ignores_road_of_distant_area_part`, `entry_none_when_only_tracks` (service/track only → None), assembled spots have `entry` and schema 5.
 - [ ] Implement; full pytest; rebuild both metros with `--skip-tiles`; report how many spots got a parking entry / road entry / none, and the median distance between entry and spot point.
 - [ ] Commit `feat(pipeline): spot entrance points for routing; spots schema 5`.
 

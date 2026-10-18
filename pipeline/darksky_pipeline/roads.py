@@ -159,41 +159,47 @@ def find_viewing_point(area: BaseGeometry, roads: RoadNetwork, grid: DarknessGri
 
 
 def find_entry(area: BaseGeometry, roads: RoadNetwork, parking_xy: np.ndarray, projector: Projector,
-               region: BaseGeometry | None = None) -> tuple[float, float] | None:
+               vp_xy: tuple[float, float], region: BaseGeometry | None = None) -> tuple[float, float] | None:
     """Entrance point (lon, lat) used as the routing target instead of the darkest interior point.
 
-    A parking place within ACCESS_SEARCH_M of `area` (nearest to the area) wins. Otherwise the point on a
-    paved ENTRY_ROAD_CLASSES road within that distance, highest class first, nearest to the area.
-    Service roads and tracks never qualify. None when nothing qualifies.
+    Anchored on the viewing point `vp_xy` (projected metres) so the entrance serves the part of the
+    area the visitor is actually going to:
+    (a) parking places within ACCESS_SEARCH_M of `area` and within ENTRY_PARKING_MAX_KM of the viewing
+        point -> the one nearest the viewing point;
+    (b) else points on paved ENTRY_ROAD_CLASSES roads (never service/track/highway) within ACCESS_SEARCH_M
+        of `area` and within ENTRY_ROAD_MAX_KM of the viewing point -> the point nearest the viewing point
+        (road class does not outrank distance);
+    (c) else None (routing and directions use the viewing point).
     """
     zone = area.buffer(config.ACCESS_SEARCH_M)
     if region is not None:
         zone = zone.intersection(region)
     if zone.is_empty:
         return None
+    vx, vy = float(vp_xy[0]), float(vp_xy[1])
     shapely.prepare(zone)
     if len(parking_xy):
-        inside = shapely.contains_xy(zone, parking_xy[:, 0], parking_xy[:, 1])
-        if inside.any():
-            cand = parking_xy[inside]
-            d = shapely.distance(shapely.points(cand), area)
-            x, y = cand[int(np.argmin(d))]
-            lon, lat = projector.to_lonlat(x, y)
+        d = np.hypot(parking_xy[:, 0] - vx, parking_xy[:, 1] - vy)
+        ok = shapely.contains_xy(zone, parking_xy[:, 0], parking_xy[:, 1]) & (d <= config.ENTRY_PARKING_MAX_KM * 1000)
+        if ok.any():
+            k = int(np.argmin(np.where(ok, d, np.inf)))
+            lon, lat = projector.to_lonlat(parking_xy[k, 0], parking_xy[k, 1])
             return float(lon), float(lat)
     if roads.tree is None:
         return None
-    idx = roads.tree.query(zone, predicate="intersects")
-    idx = idx[roads.paved[idx]]
-    for cls in config.ENTRY_ROAD_CLASSES:
-        sel = idx[roads.classes[idx] == cls]
-        if len(sel) == 0:
-            continue
-        parts = shapely.intersection(roads.geoms[sel], zone)
-        parts = parts[~shapely.is_empty(parts)]
-        if len(parts) == 0:
-            continue
-        k = int(np.argmin(shapely.distance(parts, area)))
-        pt = shapely.ops.nearest_points(parts[k], area)[0]
-        lon, lat = projector.to_lonlat(pt.x, pt.y)
-        return float(lon), float(lat)
-    return None
+    vp = shapely.Point(vx, vy)
+    reach = zone.intersection(vp.buffer(config.ENTRY_ROAD_MAX_KM * 1000, quad_segs=32))
+    if reach.is_empty:
+        return None
+    idx = roads.tree.query(reach, predicate="intersects")
+    idx = idx[roads.paved[idx] & np.isin(roads.classes[idx], list(config.ENTRY_ROAD_CLASSES))]
+    if len(idx) == 0:
+        return None
+    parts = shapely.intersection(roads.geoms[idx], reach)
+    parts = parts[~shapely.is_empty(parts)]
+    if len(parts) == 0:
+        return None
+    k = int(np.argmin(shapely.distance(parts, vp)))
+    pt = shapely.ops.nearest_points(parts[k], vp)[0]
+    lon, lat = projector.to_lonlat(pt.x, pt.y)
+    return float(lon), float(lat)

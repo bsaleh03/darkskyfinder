@@ -77,8 +77,11 @@ DRIVABLE_CLASSES = frozenset({
 UNPAVED_CLASSES = frozenset({"track"})
 HIGHWAY_CLASSES = frozenset({"motorway", "trunk"})
 ACCESS_SEARCH_M = 300
-# Entrance point (routing target) road classes, best first; never service/track.
+# Entrance point (routing target): road classes that qualify (never service/track), and how far from
+# the viewing point a parking place / road point may be (see roads.find_entry).
 ENTRY_ROAD_CLASSES = ("primary", "secondary", "tertiary", "residential", "unclassified")
+ENTRY_PARKING_MAX_KM = 1.5
+ENTRY_ROAD_MAX_KM = 3.0
 ROAD_SAMPLE_STEP_M = 100
 MAX_VIEWING_CANDIDATES = 2_000
 

@@ -214,3 +214,14 @@ def test_hidden_unknown_ids_still_reported(built_hidden):
     summary, _ = built_hidden
     assert summary.curated_unknown_ids == ["pl_ghost"]
     assert "pl_ghost" not in summary.hidden
+
+
+def test_entries_near_viewing_point(built):
+    _, spots, _ = built
+    for sp in spots.values():
+        e = sp["entry"]
+        if e is None:
+            continue
+        dy = (e["lat"] - sp["lat"]) * 111.32
+        dx = (e["lon"] - sp["lon"]) * 111.32 * math.cos(math.radians(sp["lat"]))
+        assert math.hypot(dx, dy) <= 3.0 + 0.05, sp["id"]

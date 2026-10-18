@@ -97,7 +97,8 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
             continue
         spots.append(assemble_spot(c, vp, glare_model.at(vp.x, vp.y), horizon_model.at(vp.x, vp.y),
                                    amenity_finder.near(vp.x, vp.y), curated.get(c.id),
-                                   entry=find_entry(c.area, roads, parking_xy, projector, region=region)))
+                                   entry=find_entry(c.area, roads, parking_xy, projector, (vp.x, vp.y),
+                                                    region=region)))
     log.info("%d spots, %d dropped (no drivable access)", len(spots), len(dropped))
 
     spots, merged = merge_duplicates(spots)
