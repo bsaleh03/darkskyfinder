@@ -1,7 +1,10 @@
 // Dev-only render page: draws one region's base picture with MapLibre from the local PMTiles extracts.
-// Driven by scripts/render-maps.mjs: render/index.html?metro=<key>&red=0|1&w=<W>&h=<H>
+// Driven by scripts/render-maps.mjs: render/index.html?metro=<key>&red=0|1&w=<W>&h=<H>[&bounds=W,S,E,N][&zoom=<z>]
+// Without bounds the picture is the region's extent (extent.json). With bounds (a level >= 1 tile) the map shows
+// exactly those bounds: fitted, or centred on their Web Mercator middle at the given zoom (level-0 zoom + level).
 import maplibregl, { type AddProtocolAction } from 'maplibre-gl'
 import { Protocol } from 'pmtiles'
+import { fractionToLat, type Bounds } from '../src/map/projection'
 import { renderStyle } from './style'
 
 declare global {
@@ -23,9 +26,18 @@ async function main() {
 
   const tilesUrl = `${location.origin}/tiles`
   const dataUrl = `${location.origin}/render-data`
-  const res = await fetch(`${dataUrl}/${metro}/extent.json`)
-  if (!res.ok) throw new Error(`extent.json: HTTP ${res.status}`)
-  const { bounds } = (await res.json()) as { bounds: [number, number, number, number] }
+  const zoom = q.has('zoom') ? Number(q.get('zoom')) : null
+  if (zoom !== null && !Number.isFinite(zoom)) throw new Error('bad ?zoom')
+  let bounds: Bounds
+  if (q.has('bounds')) {
+    const b = (q.get('bounds') ?? '').split(',').map(Number)
+    if (b.length !== 4 || !b.every(Number.isFinite) || !(b[0] < b[2] && b[1] < b[3])) throw new Error('bad ?bounds=W,S,E,N')
+    bounds = b as Bounds
+  } else {
+    const res = await fetch(`${dataUrl}/${metro}/extent.json`)
+    if (!res.ok) throw new Error(`extent.json: HTTP ${res.status}`)
+    bounds = ((await res.json()) as { bounds: Bounds }).bounds
+  }
 
   const el = document.getElementById('map')!
   el.style.width = `${w}px`
@@ -42,7 +54,8 @@ async function main() {
     maxCanvasSize: [16384, 16384],
     fadeDuration: 0,
   })
-  map.fitBounds(bounds, { padding: 0, animate: false })
+  if (zoom === null) map.fitBounds(bounds, { padding: 0, animate: false })
+  else map.jumpTo({ center: [(bounds[0] + bounds[2]) / 2, fractionToLat(0.5, bounds)], zoom })
   // Every source/tile error is recorded live: the script fails the render on the first one (see render/errors.ts).
   // A source whose archive is missing never loads, so `idle` may never come; the script must not wait for it.
   const errors: string[] = []

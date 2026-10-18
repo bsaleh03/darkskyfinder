@@ -250,10 +250,10 @@ def test_build_static_map_inputs_writes_all_outputs(viirs_path, tmp_path, monkey
     glow = out / "glow"
     names = ["L0.png", "L0_red.png"] + [f"L1_{c}_{r}{red}.png" for c in (0, 1) for r in (0, 1) for red in ("", "_red")]
     assert sorted(p.name for p in glow.iterdir()) == sorted(names)
-    # The level-0 glow is still written where the current render step reads it.
-    names_and_dirs = [(glow, n) for n in names] + [(out, "glow.png"), (out, "glow_red.png")]
-    for d, name in names_and_dirs:
-        with rasterio.open(d / name) as src:
+    # The render step reads glow/ only; no legacy level-0 copies next to it.
+    assert not (out / "glow.png").exists() and not (out / "glow_red.png").exists()
+    for name in names:
+        with rasterio.open(glow / name) as src:
             assert (src.width, src.height) == (extent["width"], extent["height"])
             assert src.count == 4 and src.dtypes[0] == "uint8"
             rgba = np.moveaxis(src.read(), 0, -1).astype(int)
@@ -263,8 +263,6 @@ def test_build_static_map_inputs_writes_all_outputs(viirs_path, tmp_path, monkey
             assert (g <= r / 2).all() and (b <= r / 2).all()
     with rasterio.open(glow / "L1_1_0.png") as src:  # the city's quarter
         assert src.read(4).max() > 0
-    with rasterio.open(glow / "L0.png") as a, rasterio.open(out / "glow.png") as b:
-        assert (a.read() == b.read()).all()
     assert not list(out.glob("*.aux.xml"))
 
 

@@ -3,8 +3,8 @@
 Writes to <out>/<metro>/: extent.json (bounds, level-0 full size, levels), glow/ (the glow at every level in
 STATIC_MAP_LEVELS: L0.png, L0_red.png and, for l >= 1, L{l}_{c}_{r}.png / L{l}_{c}_{r}_red.png; all Web Mercator,
 each the level-0 full size, level l cutting the extent METROS[key].tiles_bbox into 2^l x 2^l equal Mercator
-pictures, column c from the west, row r from the north), glow.png / glow_red.png (copies of the level-0 glow for
-the render step), labels.json (localities by importance) and borders.geojson (country/state borders cut to land).
+pictures, column c from the west, row r from the north), labels.json (localities by importance) and
+borders.geojson (country/state borders cut to land).
 A later render step draws the base pictures and resizes everything.
 
     python -m darksky_pipeline.static_maps --metro se_mi --viirs data/viirs/vnl_annual.tif \
@@ -278,7 +278,7 @@ def glow_tile_name(level: int, col: int, row: int, red: bool) -> str:
 
 def write_glow_levels(viirs: Path, metro_key: str, out: Path, width: int, height: int) -> None:
     """The glow at every level, normal and red, from one darkness grid computed at STATIC_MAP_GLOW_RES_M with
-    VIIRS cubic-resampled; plus glow.png / glow_red.png (= level 0) for the render step."""
+    VIIRS cubic-resampled."""
     metro = METROS[metro_key]
     bbox = metro.tiles_bbox
     grid = build_darkness_grid(viirs, bbox, metro.utm_epsg, res_m=config.STATIC_MAP_GLOW_RES_M,
@@ -293,8 +293,6 @@ def write_glow_levels(viirs: Path, metro_key: str, out: Path, width: int, height
                 for red, stops in ((False, None), (True, RED_STOPS)):
                     rgba = sqm_to_rgba(sqm, stops)
                     write_png(rgba, glow / glow_tile_name(level, col, row, red))
-                    if level == 0:
-                        write_png(rgba, out / ("glow_red.png" if red else "glow.png"))
                 del sqm
 
 
