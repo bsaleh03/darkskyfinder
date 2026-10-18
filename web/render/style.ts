@@ -9,6 +9,8 @@ export interface RenderStyleOpts {
   metro: string
   red: boolean
   bordersUrl: string
+  /** Picture level (0 = the whole region; >= 1 = a tile). Tiles start minor roads one zoom earlier. Default 0. */
+  level?: number
 }
 
 const THEMES = ['base', 'transportation', 'divisions'] as const
@@ -27,6 +29,11 @@ export const ATTRIBUTION: Record<(typeof THEMES)[number], string> = {
   transportation: `${OVERTURE}, ${OSM}, TomTom`,
   divisions: `${OVERTURE}, ${OSM}`,
 }
+
+// Minor roads from z11 at level 0; level >= 1 tiles render around level-0 zoom + 1 (se_mi ~z10.1), so they start at
+// z10 there, or the extra detail a tile is for would never appear.
+const MINOR_MINZOOM = 11
+const MINOR_MINZOOM_TILES = 10
 
 const C = {
   land: '#141A2E', water: '#0C1734', parks: '#18302A',
@@ -90,7 +97,7 @@ export function renderStyle(opts: RenderStyleOpts): StyleSpecification {
       paint: { 'line-color': col(C.minor), 'line-width': zoomWidth(0.4, 1.4) as never },
     },
     // minor first so major roads draw on top
-    road('minor', ['!', inList('class', [...MAJOR, ...MID])], C.minor, 0.4, 1.4, 11),
+    road('minor', ['!', inList('class', [...MAJOR, ...MID])], C.minor, 0.4, 1.4, (opts.level ?? 0) >= 1 ? MINOR_MINZOOM_TILES : MINOR_MINZOOM),
     road('mid', inList('class', MID), C.mid, 0.7, 2.2),
     road('major', inList('class', MAJOR), C.major, 1.2, 3),
     {

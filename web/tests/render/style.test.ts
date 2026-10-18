@@ -108,6 +108,16 @@ describe('renderStyle', () => {
     ])
   })
 
+  it('level >= 1 tiles start minor roads one zoom earlier (z10); level 0 keeps z11', () => {
+    expect(layer(renderStyle({ ...base, level: 0 }), 'road-minor').minzoom).toBe(11)
+    for (const level of [1, 2]) {
+      const s = renderStyle({ ...base, level })
+      expect(layer(s, 'road-minor').minzoom).toBe(10)
+      expect(layer(s, 'road-mid').minzoom).toBeUndefined()
+      expect(validateStyleMin(s as never)).toEqual([])
+    }
+  })
+
   it('draws attribute-less segments (most low-zoom road pieces in Overture tiles) as minor roads, under the classes', () => {
     const s = renderStyle(base)
     const ids = s.layers.map((l) => l.id)
