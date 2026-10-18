@@ -46,23 +46,6 @@
   flex: 1 1 220px;
 }
 
-.welcome-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.region-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.region-chip--active {
-  color: var(--amber);
-  border-color: var(--amber);
-}
-
 .state-panel {
   display: flex;
   flex-direction: column;

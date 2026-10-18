@@ -70,11 +70,6 @@
   z-index: 3;
 }
 
-.app--welcome .app-map {
-  position: fixed;
-  inset: 0;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;

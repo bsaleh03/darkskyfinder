@@ -4,9 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as client from '../../src/api/client'
 import { makeQueryClient } from '../../src/api/queries'
-import type { Region, SearchHit } from '../../src/api/types'
+import type { SearchHit } from '../../src/api/types'
 import { LocateButton } from '../../src/components/LocateButton'
-import { MetroSwitch } from '../../src/components/MetroSwitch'
 import { RedModeToggle } from '../../src/components/RedModeToggle'
 import { SearchBox } from '../../src/components/SearchBox'
 import { TopBar } from '../../src/components/TopBar'
@@ -152,7 +151,7 @@ describe('LocateButton', () => {
     const onError = vi.fn()
     render(<LocateButton onLocate={vi.fn()} onError={onError} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(onError).toHaveBeenCalledWith('Location unavailable — search or tap the map instead.')
+    expect(onError).toHaveBeenCalledWith('Location unavailable — search for a place instead.')
   })
 
   it('reports unavailable when geolocation is missing', () => {
@@ -179,22 +178,6 @@ describe('RedModeToggle', () => {
   })
 })
 
-describe('MetroSwitch', () => {
-  const regions: Region[] = [
-    { key: 'se_mi', name: 'Michigan', bbox: [], center: [], zoom: 8, timezone: 'x' },
-    { key: 'bay_area', name: 'SF Bay Area', bbox: [], center: [], zoom: 8, timezone: 'x' },
-  ]
-  it('metro switch lists regions', () => {
-    const onChange = vi.fn()
-    render(<MetroSwitch regions={regions} value="se_mi" onChange={onChange} />)
-    const opts = screen.getAllByRole('option')
-    expect(opts.map((o) => o.textContent)).toEqual(['Michigan', 'SF Bay Area'])
-    expect(screen.getByRole('combobox')).toHaveValue('se_mi')
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'bay_area' } })
-    expect(onChange).toHaveBeenCalledWith('bay_area')
-  })
-})
-
 describe('TopBar start chip', () => {
   function renderBar(startLabel: string | null = 'Royal Oak') {
     const qc = makeQueryClient()
@@ -202,9 +185,6 @@ describe('TopBar start chip', () => {
       <QueryClientProvider client={qc}>
         <TopBar
           startLabel={startLabel}
-          regions={[]}
-          metro="se_mi"
-          onMetroChange={vi.fn()}
           onPick={vi.fn()}
           onLocate={vi.fn()}
           onLocateError={vi.fn()}
@@ -239,6 +219,12 @@ describe('TopBar start chip', () => {
     fireEvent.blur(input, { relatedTarget: screen.getByRole('button', { name: 'elsewhere' }) })
     expect(screen.queryByRole('combobox', { name: 'Search for a place' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Royal Oak' })).toBeInTheDocument()
+  })
+
+  it('has no region switch', () => {
+    renderBar()
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByLabelText('Region')).toBeNull()
   })
 
   it('without a start the search stays', () => {

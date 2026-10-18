@@ -10,6 +10,13 @@ const BY_LABEL: Record<string, string> = {
 
 export const PIN_COLORS = [UNAVAILABLE, ...Object.values(BY_LABEL)]
 
+/** Pin fill for a spot: grey when unavailable, else by sky label (the API's "Milky Way …" labels or the bare words). */
+export function pinColor(spot: Spot): string {
+  if (spot.unavailable) return UNAVAILABLE
+  const key = (spot.sky_label ?? '').replace(/^Milky Way /i, '').toLowerCase()
+  return BY_LABEL[key] ?? BY_LABEL['not visible']
+}
+
 export function spotsToGeoJSON(spots: Spot[], selectedId: string | null): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -18,7 +25,7 @@ export function spotsToGeoJSON(spots: Spot[], selectedId: string | null): GeoJSO
       geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
       properties: {
         id: s.id,
-        color: s.unavailable ? UNAVAILABLE : (BY_LABEL[s.sky_label] ?? BY_LABEL['not visible']),
+        color: pinColor(s),
         selected: s.id === selectedId,
         darkSky: s.dark_sky_place,
         unavailable: s.unavailable,

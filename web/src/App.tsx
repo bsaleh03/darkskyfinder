@@ -12,7 +12,7 @@ import { TopBar } from './components/TopBar'
 import { VerdictCard } from './components/VerdictCard'
 import { LoadingCards, WakingUp } from './components/WakingUp'
 import { Welcome } from './components/Welcome'
-import { MapView } from './map/MapView'
+import { StaticMap } from './map/StaticMap'
 import { useRedMode } from './state/redMode'
 import { useAppState } from './state/useAppState'
 import './AppLayout.css'
@@ -65,7 +65,6 @@ function Main() {
 
   // Names of searched places by coordinate; any other start is a "Dropped pin".
   const [names, setNames] = useState<Record<string, string>>({})
-  const [focus, setFocus] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [mapFull, setMapFull] = useState(false)
   // The API's own "tonight" per metro (it stays on yesterday's date until dawn).
@@ -74,6 +73,8 @@ function Main() {
   const start = state.start
   const region = start ? regionFor(regions, start) : undefined
   const metro = region?.key ?? data?.metro ?? null
+  // The picture is the region containing the start (none for a start outside every region).
+  const mapMetro = region?.key ?? null
   const timezone = data?.timezone ?? region?.timezone ?? null
   const startName = start ? names[pointKey(start)] : undefined
   const startLabel = start ? (startName ?? 'Dropped pin') : null
@@ -128,24 +129,14 @@ function Main() {
     update({ start: at, spot: null })
   }
 
-  const onPick = (hit: SearchHit) => {
-    setFocus(hit.metro)
-    setStart(hit, hit.name)
-  }
+  const onPick = (hit: SearchHit) => setStart(hit, hit.name)
   const onLocate = (p: LatLon) => {
     const r = regionFor(regions, p)
     if (regions.length > 0 && !r) {
       setNotice(COVERAGE)
       return
     }
-    setFocus(r?.key ?? null)
     setStart(p, null)
-  }
-  const onRegion = (key: string) => {
-    setFocus(key)
-    setNotice(null)
-    setMapFull(false)
-    if (start) update({ start: null, spot: null })
   }
   const toggleSpot = (id: string) => update({ spot: state.spot === id ? null : id })
 
@@ -158,12 +149,7 @@ function Main() {
   let body
   if (error) {
     body = (
-      <ErrorState
-        error={error}
-        regions={regions}
-        onRegion={onRegion}
-        onRetry={spots.refetch}
-      />
+      <ErrorState error={error} onRetry={spots.refetch} />
     )
   } else if (spots.waking) {
     body = <WakingUp />
@@ -196,9 +182,6 @@ function Main() {
           </h1>
           <TopBar
             startLabel={startLabel}
-            regions={regions}
-            metro={metro}
-            onMetroChange={onRegion}
             onPick={onPick}
             onLocate={onLocate}
             onLocateError={setNotice}
@@ -228,33 +211,29 @@ function Main() {
       ) : (
         <Welcome
           headingRef={welcomeHeading}
-          regions={regions}
-          focusRegion={focus}
           notice={notice}
           waking={startupWaking}
           onPick={onPick}
           onLocate={onLocate}
           onLocateError={setNotice}
-          onRegion={onRegion}
         />
       )}
-      <div className="app-map">
-        <MapView
-          spots={data?.spots ?? []}
-          start={start}
-          selectedId={state.spot}
-          glow={state.glow}
-          red={red}
-          regions={regions}
-          focusRegion={focus ?? metro ?? undefined}
-          onSelect={(id) => {
-            setMapFull(false)
-            update({ spot: id })
-          }}
-          onSetStart={(p) => setStart(p, null)}
-          onToggleGlow={() => update({ glow: !state.glow })}
-        />
-        {start && (
+      {start && (
+        <div className="app-map">
+          <StaticMap
+            metro={mapMetro}
+            spots={data?.spots ?? []}
+            start={start}
+            selectedId={state.spot}
+            glow={state.glow}
+            red={red}
+            driveMinutes={state.drive}
+            onSelect={(id) => {
+              setMapFull(false)
+              update({ spot: id })
+            }}
+            onToggleGlow={() => update({ glow: !state.glow })}
+          />
           <button
             type="button"
             className="ctl-btn app-map-expand"
@@ -263,8 +242,8 @@ function Main() {
           >
             {mapFull ? 'Show list' : 'Full map'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {start && (
         <main className={`app-list${busy ? ' app-list--stale' : ''}`} aria-busy={busy}>
           {error?.kind !== 'out_of_coverage' && (

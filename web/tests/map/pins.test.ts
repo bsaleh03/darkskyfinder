@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { spotsToGeoJSON } from '../../src/map/pins'
+import { pinColor, spotsToGeoJSON } from '../../src/map/pins'
 import type { Spot } from '../../src/api/types'
 
 const mk = (id: string, sky_label: string, extra: Partial<Spot> = {}): Spot =>
@@ -20,5 +20,19 @@ describe('spotsToGeoJSON', () => {
     const [a, b] = fc.features.map((f) => f.properties!)
     expect(a).toMatchObject({ id: 'a', color: '#5A6280', selected: false, darkSky: true, unavailable: true })
     expect(b).toMatchObject({ id: 'b', color: '#7FD6A0', selected: true, darkSky: false, unavailable: false })
+  })
+})
+
+describe('pinColor', () => {
+  it('colors by sky label, with or without the API "Milky Way" prefix', () => {
+    expect(pinColor(mk('a', 'Milky Way vivid'))).toBe('#7FD6A0')
+    expect(pinColor(mk('a', 'Milky Way visible'))).toBe('#F0C070')
+    expect(pinColor(mk('a', 'faint'))).toBe('#F0A070')
+    expect(pinColor(mk('a', 'Milky Way not visible'))).toBe('#F0808A')
+    expect(pinColor(mk('a', 'unknown'))).toBe('#F0808A')
+  })
+
+  it('unavailable spots are grey', () => {
+    expect(pinColor(mk('a', 'Milky Way vivid', { unavailable: true }))).toBe('#5A6280')
   })
 })

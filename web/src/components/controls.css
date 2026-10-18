@@ -15,8 +15,3 @@
   color: var(--amber);
   border-color: var(--amber);
 }
-
-.ctl-select option {
-  color: var(--ink);
-  background: var(--sky-3);
-}

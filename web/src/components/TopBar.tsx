@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Region, SearchHit } from '../api/types'
+import type { SearchHit } from '../api/types'
 import { LocateButton } from './LocateButton'
-import { MetroSwitch } from './MetroSwitch'
 import { RedModeToggle } from './RedModeToggle'
 import { SearchBox } from './SearchBox'
 import './TopBar.css'
 
 interface Props {
   startLabel: string | null // picked hit name, "Dropped pin", or null when no start
-  regions: Region[]
-  metro: string | null
-  onMetroChange: (key: string) => void
   onPick: (hit: SearchHit) => void
   onLocate: (p: { lat: number; lon: number }) => void
   onLocateError: (msg: string) => void
 }
 
-export function TopBar({ startLabel, regions, metro, onMetroChange, onPick, onLocate, onLocateError }: Props) {
+export function TopBar({ startLabel, onPick, onLocate, onLocateError }: Props) {
   const [searching, setSearching] = useState(false)
   const showSearch = searching || startLabel === null
   const main = useRef<HTMLDivElement>(null)
@@ -80,7 +76,6 @@ export function TopBar({ startLabel, regions, metro, onMetroChange, onPick, onLo
         )}
       </div>
       <div className="top-bar-side">
-        <MetroSwitch regions={regions} value={metro} onChange={onMetroChange} />
         <RedModeToggle />
       </div>
     </header>

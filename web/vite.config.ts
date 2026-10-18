@@ -6,7 +6,7 @@ import { checkBuildEnv } from './buildenv'
 import { devtilesMiddleware } from './devtiles'
 import { glyphFallback } from './glyphfallback'
 
-// Serves local PMTiles with Range support: real pipeline output at /tiles, e2e fixtures at /e2e-tiles.
+// Serves local files with Range support: real pipeline output at /tiles (map pictures at /tiles/maps), e2e fixtures at /e2e-tiles.
 const devTiles = (mounts: Record<string, string> = { '/tiles': '../pipeline/out' }): Plugin => {
   const mount = (use: (path: string, mw: ReturnType<typeof devtilesMiddleware>) => void) => {
     for (const [path, dir] of Object.entries(mounts)) use(path, devtilesMiddleware(resolve(__dirname, dir)))
@@ -23,7 +23,14 @@ export default defineConfig(({ command, mode }) => {
   return {
     plugins: [
       react(),
-      devTiles({ '/tiles': '../pipeline/out', '/e2e-tiles': 'e2e/fixtures/tiles' }),
+      // Map pictures mirror the R2 layout maps/<metro>/…; they are mounted before /tiles because a devtiles mount
+      // answers 404 itself rather than falling through.
+      devTiles({
+        '/tiles/maps/se_mi': '../pipeline/out/maps/se_mi/web',
+        '/tiles/maps/bay_area': '../pipeline/out/maps/bay_area/web',
+        '/tiles': '../pipeline/out',
+        '/e2e-tiles': 'e2e/fixtures/tiles',
+      }),
       glyphFallback(resolve(__dirname, 'public/glyphs')),
     ],
     build: {

@@ -12,6 +12,7 @@ html[data-red="true"] {
   --no: #a8231b;
   --glass: rgb(40 0 0 / 60%);
   --glass-border: rgb(255 59 48 / 20%);
+  --water: #170000;
 }
 
 /* Colour emoji (flags) cannot take a token colour: tint them desaturated red instead (spec section 6). */

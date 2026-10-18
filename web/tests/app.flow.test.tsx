@@ -5,22 +5,27 @@ import { makeQueryClient, resetSpotsBudgetForTests } from '../src/api/queries'
 import * as client from '../src/api/client'
 import { ApiError } from '../src/api/client'
 import type { Region, Spot, SpotsResponse } from '../src/api/types'
-import type { MapViewProps } from '../src/map/MapView'
+import type { useMapManifest as UseMapManifest } from '../src/map/useMapManifest'
+import { restoreView, stubView } from './viewStub'
 
-// maplibre-gl does not run in jsdom: replace MapView with a stub that exposes its props.
-const mapProps: { current: MapViewProps | null } = { current: null }
-vi.mock('../src/map/MapView', () => ({
-  MapView: (p: MapViewProps) => {
-    mapProps.current = p
-    return (
-      <div data-testid="map" data-focus={p.focusRegion ?? ''} data-glow={String(p.glow)} data-pins={p.spots.length}>
-        <button type="button" onClick={() => p.onSetStart({ lat: 42.3, lon: -83.4 })}>
-          mock drop pin
-        </button>
-      </div>
-    )
-  },
+// The map pictures are static files: serve a fixed manifest for any covered metro, none otherwise.
+const MANIFEST = vi.hoisted(() => ({
+  metro: 'se_mi',
+  bounds: [-86.9, 41.65, -82.4, 45.9] as [number, number, number, number],
+  aspect: 1.3089,
+  widths: [874, 1748, 3496],
+  files: { base: 'base_{w}.webp', base_red: 'base_red_{w}.webp', glow: 'glow_{w}.webp', glow_red: 'glow_red_{w}.webp' },
+  labels: 'labels.json',
 }))
+vi.mock('../src/map/useMapManifest', async (orig) => ({
+  ...(await orig<typeof import('../src/map/useMapManifest')>()),
+  useMapManifest: (metro: string | null): ReturnType<typeof UseMapManifest> =>
+    metro ? { manifest: MANIFEST, labels: [], status: 'ready' } : { manifest: null, labels: [], status: 'error' },
+}))
+
+const mapEl = () => document.querySelector<HTMLElement>('.app-map')
+const mapImages = () => [...(mapEl()?.querySelectorAll('img') ?? [])].map((i) => i.getAttribute('src') ?? '')
+const list = () => within(screen.getByRole('main'))
 
 vi.mock('../src/api/client', async (orig) => {
   const actual = await orig<typeof import('../src/api/client')>()
@@ -108,7 +113,7 @@ async function advance(ms: number) {
 
 beforeEach(() => {
   resetSpotsBudgetForTests()
-  mapProps.current = null
+  stubView(400, 300)
   fetchSpots.mockReset()
   fetchRegions.mockReset().mockResolvedValue(REGIONS)
   fetchHealth.mockReset().mockResolvedValue({ ok: true, metros: ['se_mi', 'bay_area'], release: 'test' })
@@ -125,6 +130,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  restoreView()
 })
 
 describe('App flow', () => {
@@ -133,20 +139,32 @@ describe('App flow', () => {
     expect(screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Search for a place' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Use my location' })).toBeInTheDocument()
-    const chip = await screen.findByRole('button', { name: 'Michigan' })
-    expect(screen.getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()
-    fireEvent.click(chip)
-    expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'se_mi')
+    await waitFor(() => expect(fetchRegions).toHaveBeenCalled())
+    // Only the question and the picker: no picture, no region chips.
+    expect(mapEl()).toBeNull()
+    expect(document.querySelectorAll('img')).toHaveLength(0)
+    expect(screen.queryByRole('group', { name: 'Regions' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Michigan' })).toBeNull()
+    expect(screen.queryByText(/tap the map/)).toBeNull()
     expect(fetchSpots).not.toHaveBeenCalled()
     expect(fetchHealth).toHaveBeenCalled()
 
-    // Tapping the map sets a "Dropped pin" start and shows results.
-    fetchSpots.mockResolvedValue(response())
-    fireEvent.click(screen.getByRole('button', { name: 'mock drop pin' }))
-    expect(new URLSearchParams(window.location.search).get('lat')).toBe('42.3')
-    expect(await screen.findByRole('button', { name: 'Dropped pin' })).toBeInTheDocument()
-    // Focus moves to the results heading.
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: /Dark skies near Dropped pin/ }))
+    // "Use my location" sets a "Dropped pin" start and shows results.
+    const geo = {
+      getCurrentPosition: (ok: (p: { coords: { latitude: number; longitude: number } }) => void) =>
+        ok({ coords: { latitude: 42.3, longitude: -83.4 } }),
+    }
+    Object.defineProperty(navigator, 'geolocation', { value: geo, configurable: true })
+    try {
+      fetchSpots.mockResolvedValue(response())
+      fireEvent.click(screen.getByRole('button', { name: 'Use my location' }))
+      expect(new URLSearchParams(window.location.search).get('lat')).toBe('42.3')
+      expect(await screen.findByRole('button', { name: 'Dropped pin' })).toBeInTheDocument()
+      // Focus moves to the results heading.
+      expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: /Dark skies near Dropped pin/ }))
+    } finally {
+      Object.defineProperty(navigator, 'geolocation', { value: undefined, configurable: true })
+    }
   })
 
   it('results render verdict and cards', async () => {
@@ -166,7 +184,11 @@ describe('App flow', () => {
     expect(screen.getByText(/Not available right now/)).toBeInTheDocument()
     // Reloaded start with no remembered label shows "Dropped pin".
     expect(screen.getByRole('button', { name: 'Dropped pin' })).toBeInTheDocument()
-    expect(screen.getByTestId('map')).toHaveAttribute('data-pins', '3')
+    // The map shows the region picture, the start and one pin button per spot.
+    const map = within(mapEl()!)
+    expect(mapImages()[0]).toMatch(/\/tiles\/maps\/se_mi\/base_\d+\.webp$/)
+    expect(map.getByRole('img', { name: 'Your start' })).toBeInTheDocument()
+    expect(['Closed Park', 'Lake Park Beach', 'Hidden Lake'].map((n) => map.getByRole('button', { name: n }))).toHaveLength(3)
     expect(screen.getByRole('group', { name: 'Choose a night' })).toBeInTheDocument()
     const args = fetchSpots.mock.calls[0][0]
     expect(args).toMatchObject({ lat: 42.49, lon: -83.14, drive: 90, limit: 25 })
@@ -176,18 +198,30 @@ describe('App flow', () => {
     go(START)
     fetchSpots.mockResolvedValue(response())
     render(<App />)
-    const head = await screen.findByRole('button', { name: /Hidden Lake/ })
+    await screen.findByText('Great night for stars.')
+    const head = list().getByRole('button', { name: /Hidden Lake/ })
     const before = window.history.length
     fireEvent.click(head)
     expect(new URLSearchParams(window.location.search).get('spot')).toBe('s2')
     expect(window.history.length).toBe(before + 1)
-    expect(screen.getByRole('button', { name: /Hidden Lake/ })).toHaveAttribute('aria-expanded', 'true')
-    expect(mapProps.current?.selectedId).toBe('s2')
+    expect(list().getByRole('button', { name: /Hidden Lake/ })).toHaveAttribute('aria-expanded', 'true')
+    expect(within(mapEl()!).getByRole('button', { name: 'Hidden Lake' }).className).toContain('static-map-pin--selected')
     await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled())
-    // Tapping its pin does the same for another spot.
-    act(() => mapProps.current!.onSelect('s1'))
+  })
+
+  it('clicking a pin opens its card and leaves the full map', async () => {
+    go(START)
+    fetchSpots.mockResolvedValue(response())
+    const { container } = render(<App />)
+    await screen.findByText('Great night for stars.')
+    fireEvent.click(screen.getByRole('button', { name: 'Full map' }))
+    expect(container.querySelector('.app--map-full')).not.toBeNull()
+    const before = window.history.length
+    fireEvent.click(within(mapEl()!).getByRole('button', { name: 'Lake Park Beach' }))
     expect(new URLSearchParams(window.location.search).get('spot')).toBe('s1')
-    expect(screen.getByRole('button', { name: /Lake Park Beach/ })).toHaveAttribute('aria-expanded', 'true')
+    expect(window.history.length).toBe(before + 1)
+    expect(list().getByRole('button', { name: /Lake Park Beach/ })).toHaveAttribute('aria-expanded', 'true')
+    expect(container.querySelector('.app--map-full')).toBeNull()
   })
 
   it('out-of-coverage start shows coverage message', async () => {
@@ -195,13 +229,11 @@ describe('App flow', () => {
     fetchSpots.mockRejectedValue(new ApiError('out_of_coverage', 422, { error: 'out_of_coverage' }))
     render(<App />)
     expect(await screen.findByText('We cover southeast Michigan and the SF Bay Area so far.')).toBeInTheDocument()
-    const chips = screen.getByRole('group', { name: 'Regions' })
-    expect(within(chips).getByRole('button', { name: 'Michigan' })).toBeInTheDocument()
-    fireEvent.click(within(chips).getByRole('button', { name: 'SF Bay Area' }))
-    expect(window.location.search).not.toContain('lat=')
-    expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'bay_area')
-    const h1 = screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })
-    expect(document.activeElement).toBe(h1) // focus returns to the Welcome headline
+    // Text only: no region chips. The start is in no region, so there is no picture either.
+    expect(screen.queryByRole('group', { name: 'Regions' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Michigan' })).toBeNull()
+    expect(within(mapEl()!).getByText('Map unavailable right now')).toBeInTheDocument()
+    expect(mapImages()).toEqual([])
   })
 
   it('night_out_of_range resets to tonight', async () => {
@@ -281,16 +313,27 @@ describe('App flow', () => {
     fetchSpots.mockResolvedValue(response())
     render(<App />)
     await screen.findByText('Great night for stars.')
-    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'true')
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/), expect.stringMatching(/\/glow_\d+\.webp$/)])
     const before = window.history.length
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
     expect(document.documentElement.dataset.red).toBe('true')
-    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'true')
-    expect(mapProps.current?.red).toBe(true)
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_red_\d+\.webp$/), expect.stringMatching(/\/glow_red_\d+\.webp$/)])
     expect(window.location.search).toBe('?lat=42.49&lon=-83.14')
     expect(window.history.length).toBe(before)
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
-    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'true')
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/), expect.stringMatching(/\/glow_\d+\.webp$/)])
+  })
+
+  it('the glow toggle on the map sets glow=0 in the URL', async () => {
+    go(START)
+    fetchSpots.mockResolvedValue(response())
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    const toggle = screen.getByRole('button', { name: 'Light pollution glow' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(toggle)
+    expect(new URLSearchParams(window.location.search).get('glow')).toBe('0')
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/)])
   })
 
   it('a glow=0 URL stays off in and out of red mode', async () => {
@@ -299,9 +342,9 @@ describe('App flow', () => {
     fetchSpots.mockResolvedValue(response())
     render(<App />)
     await screen.findByText('Great night for stars.')
-    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'false')
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_red_\d+\.webp$/)])
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
-    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'false')
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/)])
     expect(new URLSearchParams(window.location.search).get('glow')).toBe('0')
   })
 
@@ -382,17 +425,11 @@ describe('App flow', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('welcome shows region chips before /api/regions answers, and waking copy after 3 s', async () => {
+  it('welcome shows waking copy after 3 s of a cold API', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     fetchRegions.mockReturnValue(new Promise(() => {}))
     fetchHealth.mockReturnValue(new Promise(() => {}))
     render(<App />)
-    const chips = screen.getByRole('group', { name: 'Regions' })
-    expect(within(chips).getByRole('button', { name: 'Michigan' })).toBeInTheDocument()
-    expect(within(chips).getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()
-    fireEvent.click(within(chips).getByRole('button', { name: 'Michigan' }))
-    expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'se_mi')
-    expect(mapProps.current?.regions.map((r) => r.key).sort()).toEqual(['bay_area', 'se_mi'])
     expect(screen.queryByText('Waking up the stargazing engine…')).toBeNull()
     await advance(3200)
     expect(screen.getByText('Waking up the stargazing engine…')).toBeInTheDocument()
@@ -432,12 +469,13 @@ describe('App flow', () => {
     Object.defineProperty(navigator, 'geolocation', { value: geo, configurable: true })
     try {
       render(<App />)
-      await screen.findByRole('button', { name: 'Michigan' })
+      await waitFor(() => expect(fetchRegions).toHaveBeenCalled())
       fireEvent.click(screen.getByRole('button', { name: 'Use my location' }))
       expect(screen.getByText('We cover southeast Michigan and the SF Bay Area so far.')).toBeInTheDocument()
       expect(window.location.search).not.toContain('lat=')
       expect(screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })).toBeInTheDocument()
-      expect(within(screen.getByRole('group', { name: 'Regions' })).getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: 'Regions' })).toBeNull()
+      expect(mapEl()).toBeNull()
       expect(fetchSpots).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(navigator, 'geolocation', { value: undefined, configurable: true })

@@ -12,6 +12,7 @@
   --no: #f0808a;
   --glass: rgba(20 24 48 / 55%);
   --glass-border: rgba(255 255 255 / 8%);
+  --water: #0c1734;
   --radius-card: 16px;
   --radius-control: 12px;
 }

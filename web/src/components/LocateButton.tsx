@@ -1,6 +1,6 @@
 import './controls.css'
 
-const DENIED = 'Location unavailable — search or tap the map instead.'
+const DENIED = 'Location unavailable — search for a place instead.'
 
 interface Props {
   onLocate: (p: { lat: number; lon: number }) => void
