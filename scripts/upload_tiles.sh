@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Upload the pre-rendered map pictures (and only those) to Cloudflare R2 via rclone:
 # pipeline/out/maps/<metro>/web/ -> r2:$R2_BUCKET/maps/<metro>/. The manifest decides every file name:
-# manifest.json, labels.json, {base,base_red,glow,glow_red}_<width>.webp for every level-0 width it lists, and
-# {base,base_red}_L<l>_<c>_<r>.webp for every tile of every level >= 1 (the glow is level 0 only; 2 + 4x3 + 2x4 =
-# 22 files per region with two levels, 44 for both). The bucket holds nothing else.
+# manifest.json, labels.json, {base,base_red,base_glow,base_glow_red}_<width>.webp for every level-0 width it lists,
+# and the same four kinds as <kind>_L<l>_<c>_<r>.webp for every tile of every level >= 1 (the glow is drawn into the
+# base_glow pictures; 2 + 4x3 + 4x4 = 30 files per region with two levels, 60 for both). The bucket holds nothing else.
 # Usage: scripts/upload_tiles.sh [--dry-run]
 # Requires an rclone remote named "r2" (see README: `rclone config`, provider Cloudflare).
 # Credentials live in your rclone config; this script never reads or prints them.
@@ -22,9 +22,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MAPS="${MAPS_DIR:-$ROOT/pipeline/out/maps}"
 BUCKET="${R2_BUCKET:-darksky-tiles}"
 METROS=(se_mi bay_area)
-KINDS=(base base_red glow glow_red)
-TILE_KINDS=(base base_red)
-FILE_RE='^(manifest\.json|labels\.json|(base|base_red|glow|glow_red)_[0-9]+\.webp|(base|base_red)_L[1-9][0-9]*_[0-9]+_[0-9]+\.webp)$'
+KINDS=(base base_red base_glow base_glow_red)
+TILE_KINDS=("${KINDS[@]}")
+FILE_RE='^(manifest\.json|labels\.json|(base|base_red|base_glow|base_glow_red)_([0-9]+|L[1-9][0-9]*_[0-9]+_[0-9]+)\.webp)$'
 
 command -v rclone >/dev/null || { echo "rclone not found on PATH" >&2; exit 1; }
 REMOTES="$(rclone listremotes)"
@@ -44,7 +44,7 @@ for m in "${METROS[@]}"; do
   for w in $widths; do
     for k in "${KINDS[@]}"; do files+=("${k}_${w}.webp"); done
   done
-  # Levels >= 1: every base and base_red tile of the level's cols x rows grid, named by the manifest's tile templates.
+  # Levels >= 1: every tile of every kind on the level's cols x rows grid, named by the manifest's tile templates.
   levels="$(grep -o '{"level":[0-9]*,"cols":[0-9]*,"rows":[0-9]*}' <<<"$manifest" | tr -dc '0-9,\n' || true)"
   [ -n "$levels" ] || { echo "no levels in $dir/manifest.json (render-maps writes manifest v2)" >&2; exit 1; }
   tiles="$(grep -oE '"tiles":[{]("[a-z_]+":"[^"]*",?)*[}]' <<<"$manifest" || true)"
