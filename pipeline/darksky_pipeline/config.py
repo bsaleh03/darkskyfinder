@@ -134,7 +134,8 @@ OVERTURE_TILE_THEMES = ("base", "transportation", "buildings", "divisions")
 LIGHTPOLLUTION_BRIGHT_SQM = 17.0  # SQM rendered at full brightness in the overlay
 # Static map inputs (pre-rendered per-region pictures; extent = METROS[key].tiles_bbox).
 STATIC_MAP_MAX_PIXELS = 16_000_000  # decoded size cap per image (mobile Safari)
-STATIC_MAP_GLOW_RES_M = 500  # darkness grid resolution for the glow picture; sky glow is smooth
+STATIC_MAP_GLOW_RES_M = 200  # darkness grid for the glow pictures; finer than VIIRS (~450 m), cubic-resampled
+STATIC_MAP_LEVELS = (0, 1)  # level l = 2^l x 2^l pictures, each the level-0 full size
 STATIC_MAP_LABEL_LIMIT = 400  # most important localities kept per region
 # Overture divisions: country/state borders cut to land.
 BORDER_COUNTRIES = frozenset({"US", "CA", "MX"})

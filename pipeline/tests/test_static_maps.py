@@ -45,6 +45,84 @@ def test_glow_rgba_shape_and_ramps(darkness_grid):
     assert (g <= r / 2).all() and (b <= r / 2).all()
 
 
+
+def test_glow_res_and_levels_config():
+    assert config.STATIC_MAP_GLOW_RES_M == 200
+    assert config.STATIC_MAP_LEVELS == (0, 1)
+
+
+@pytest.mark.parametrize("level", [0, 1])
+def test_tile_bounds_cut_the_extent_into_exact_mercator_fractions(level):
+    from darksky_pipeline.static_maps import mercator_bounds, tile_bounds
+    x0, y0, x1, y1 = mercator_bounds(MI)
+    n = 2 ** level
+    for c in range(n):
+        for r in range(n):
+            tx0, ty0, tx1, ty1 = tile_bounds(MI, level, c, r)
+            assert tx0 == pytest.approx(x0 + (x1 - x0) * c / n, abs=1e-6)
+            assert tx1 == pytest.approx(x0 + (x1 - x0) * (c + 1) / n, abs=1e-6)
+            assert ty1 == pytest.approx(y1 - (y1 - y0) * r / n, abs=1e-6)  # row 0 is the north edge
+            assert ty0 == pytest.approx(y1 - (y1 - y0) * (r + 1) / n, abs=1e-6)
+            if c + 1 < n:
+                assert tile_bounds(MI, level, c + 1, r)[0] == tx1  # neighbours share edges exactly
+            if r + 1 < n:
+                assert tile_bounds(MI, level, c, r + 1)[3] == ty0
+
+
+def _step_edges(alpha: np.ndarray) -> int:
+    """Adjacent-pixel jumps of >= 3 alpha levels that are >= 3x both neighbouring jumps (pixel-block edges)."""
+    a = alpha.astype(float)
+    count = 0
+    for d in (np.abs(np.diff(a, axis=1)), np.abs(np.diff(a, axis=0)).T):
+        inner, nb = d[:, 1:-1], np.maximum(d[:, :-2], d[:, 2:])
+        count += int(((inner >= 3 * np.maximum(nb, 1)) & (inner >= 3)).sum())
+    return count
+
+
+@pytest.fixture(scope="module")
+def fine_grid(viirs_path):
+    from darksky_pipeline.darkness import build_darkness_grid
+    from rasterio.warp import Resampling
+    return build_darkness_grid(viirs_path, REGION_BBOX, TEST_EPSG, res_m=config.STATIC_MAP_GLOW_RES_M,
+                               resampling=Resampling.cubic)
+
+
+def test_glow_tile_rgba_is_level0_size_and_smooth_at_level1(fine_grid):
+    from darksky_pipeline.static_maps import glow_tile_rgba, image_size
+    from darksky_pipeline.tiles import RED_STOPS
+    w0, h0 = image_size(REGION_BBOX, 40_000)
+    # The fixture city sits in the north-east quarter: level-1 tile (1, 0).
+    for level, col, row in ((0, 0, 0), (1, 1, 0), (1, 0, 1)):
+        rgba = glow_tile_rgba(fine_grid, REGION_BBOX, level, col, row, w0, h0)
+        assert rgba.shape == (h0, w0, 4) and rgba.dtype == np.uint8
+        red = glow_tile_rgba(fine_grid, REGION_BBOX, level, col, row, w0, h0, RED_STOPS).astype(int)
+        visible = red[..., 3] > 0
+        r, g, b = red[..., 0][visible], red[..., 1][visible], red[..., 2][visible]
+        assert (g <= r / 2).all() and (b <= r / 2).all()
+    city = glow_tile_rgba(fine_grid, REGION_BBOX, 1, 1, 0, w0, h0)
+    alpha = city[..., 3]
+    assert alpha.max() > 100 and (alpha == 0).mean() < 0.9  # the city glow is in this tile
+    assert _step_edges(alpha) == 0
+    assert np.abs(np.diff(alpha.astype(int), axis=1)).max() <= 24
+    assert np.abs(np.diff(alpha.astype(int), axis=0)).max() <= 24
+
+
+def test_step_edge_check_catches_pixel_blocks(fine_grid):
+    """The smoothness check itself: a nearest-neighbour (blocky) warp of the same grid fails it."""
+    from rasterio.crs import CRS
+    from rasterio.transform import from_bounds, from_origin
+    from rasterio.warp import Resampling, reproject
+    from darksky_pipeline.static_maps import image_size, tile_bounds
+    from darksky_pipeline.tiles import sqm_to_rgba
+    w0, h0 = image_size(REGION_BBOX, 40_000)
+    sqm = np.full((h0, w0), np.nan, dtype=np.float32)
+    reproject(source=fine_grid.sqm.astype(np.float32), destination=sqm,
+              src_transform=from_origin(fine_grid.x0, fine_grid.y0, fine_grid.res, fine_grid.res),
+              src_crs=CRS.from_epsg(fine_grid.epsg), src_nodata=np.nan,
+              dst_transform=from_bounds(*tile_bounds(REGION_BBOX, 1, 1, 0), w0, h0), dst_crs=CRS.from_epsg(3857),
+              dst_nodata=np.nan, resampling=Resampling.nearest)
+    assert _step_edges(sqm_to_rgba(sqm)[..., 3]) > 100
+
 def test_labels_query_and_json():
     from darksky_pipeline.static_maps import labels_json, labels_query
     q = labels_query("2026-09-23.1", MI)
@@ -168,11 +246,25 @@ def test_build_static_map_inputs_writes_all_outputs(viirs_path, tmp_path, monkey
     extent = json.loads((out / "extent.json").read_text(encoding="utf-8"))
     assert extent["bounds"] == list(REGION_BBOX)
     assert extent["width"] * extent["height"] <= 40_000 and extent["width"] % 4 == 0
-    for name in ("glow.png", "glow_red.png"):
-        with rasterio.open(out / name) as src:
+    assert extent["levels"] == [0, 1]
+    glow = out / "glow"
+    names = ["L0.png", "L0_red.png"] + [f"L1_{c}_{r}{red}.png" for c in (0, 1) for r in (0, 1) for red in ("", "_red")]
+    assert sorted(p.name for p in glow.iterdir()) == sorted(names)
+    # The level-0 glow is still written where the current render step reads it.
+    names_and_dirs = [(glow, n) for n in names] + [(out, "glow.png"), (out, "glow_red.png")]
+    for d, name in names_and_dirs:
+        with rasterio.open(d / name) as src:
             assert (src.width, src.height) == (extent["width"], extent["height"])
             assert src.count == 4 and src.dtypes[0] == "uint8"
-            assert src.read(4).max() > 0
+            rgba = np.moveaxis(src.read(), 0, -1).astype(int)
+        visible = rgba[..., 3] > 0
+        if name.endswith("_red.png"):
+            r, g, b = rgba[..., 0][visible], rgba[..., 1][visible], rgba[..., 2][visible]
+            assert (g <= r / 2).all() and (b <= r / 2).all()
+    with rasterio.open(glow / "L1_1_0.png") as src:  # the city's quarter
+        assert src.read(4).max() > 0
+    with rasterio.open(glow / "L0.png") as a, rasterio.open(out / "glow.png") as b:
+        assert (a.read() == b.read()).all()
     assert not list(out.glob("*.aux.xml"))
 
 

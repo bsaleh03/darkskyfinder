@@ -1,8 +1,11 @@
 """Inputs for the pre-rendered per-region map pictures (the app shows pictures, not a live map).
 
-Writes to <out>/<metro>/: extent.json, glow.png, glow_red.png (Web Mercator, exactly the picture extent
-METROS[key].tiles_bbox), labels.json (localities by importance) and borders.geojson (country/state borders
-cut to land). A later render step draws the base pictures and resizes everything.
+Writes to <out>/<metro>/: extent.json (bounds, level-0 full size, levels), glow/ (the glow at every level in
+STATIC_MAP_LEVELS: L0.png, L0_red.png and, for l >= 1, L{l}_{c}_{r}.png / L{l}_{c}_{r}_red.png; all Web Mercator,
+each the level-0 full size, level l cutting the extent METROS[key].tiles_bbox into 2^l x 2^l equal Mercator
+pictures, column c from the west, row r from the north), glow.png / glow_red.png (copies of the level-0 glow for
+the render step), labels.json (localities by importance) and borders.geojson (country/state borders cut to land).
+A later render step draws the base pictures and resizes everything.
 
     python -m darksky_pipeline.static_maps --metro se_mi --viirs data/viirs/vnl_annual.tif \
         --tiles-release 2026-09-23.1 --out out/maps
@@ -53,15 +56,37 @@ def image_size(bbox: BBox, max_pixels: int = config.STATIC_MAP_MAX_PIXELS) -> tu
     return width, max(1, round(width * aspect))
 
 
-def glow_rgba(grid: DarknessGrid, bbox: BBox, width: int, height: int,
-              stops: np.ndarray | None = None) -> np.ndarray:
-    """The darkness grid resampled onto the picture's Web Mercator pixel grid and colored with the glow ramp."""
-    sqm = np.full((height, width), np.nan, dtype=np.float32)
+def tile_bounds(bbox: BBox, level: int, col: int, row: int) -> tuple[float, float, float, float]:
+    """Web Mercator (x0, y0, x1, y1) of picture (col, row) at `level`: the extent cut into 2^level x 2^level
+    equal parts, col 0 at the west edge, row 0 at the north edge. Neighbours share edges exactly."""
+    x0, y0, x1, y1 = mercator_bounds(bbox)
+    n = 2 ** level
+    fx = lambda i: x0 + (x1 - x0) * i / n  # noqa: E731
+    fy = lambda i: y1 - (y1 - y0) * i / n  # noqa: E731
+    return fx(col), fy(row + 1), fx(col + 1), fy(row)
+
+
+def glow_tile_sqm(grid: DarknessGrid, bbox: BBox, level: int, col: int, row: int,
+                  width0: int, height0: int) -> np.ndarray:
+    """The darkness grid warped (cubic, so the glow stays smooth when magnified) onto picture (col, row) at `level`,
+    width0 x height0 pixels."""
+    sqm = np.full((height0, width0), np.nan, dtype=np.float32)
     reproject(source=grid.sqm.astype(np.float32), destination=sqm,
               src_transform=from_origin(grid.x0, grid.y0, grid.res, grid.res), src_crs=CRS.from_epsg(grid.epsg),
-              src_nodata=np.nan, dst_transform=from_bounds(*mercator_bounds(bbox), width, height),
-              dst_crs=CRS.from_epsg(3857), dst_nodata=np.nan, resampling=Resampling.bilinear)
-    return sqm_to_rgba(sqm, stops)
+              src_nodata=np.nan, dst_transform=from_bounds(*tile_bounds(bbox, level, col, row), width0, height0),
+              dst_crs=CRS.from_epsg(3857), dst_nodata=np.nan, resampling=Resampling.cubic)
+    return sqm  # sqm_to_rgba clamps to the ramp, so cubic overshoot cannot leave it
+
+
+def glow_tile_rgba(grid: DarknessGrid, bbox: BBox, level: int, col: int, row: int, width0: int, height0: int,
+                   stops: np.ndarray | None = None) -> np.ndarray:
+    return sqm_to_rgba(glow_tile_sqm(grid, bbox, level, col, row, width0, height0), stops)
+
+
+def glow_rgba(grid: DarknessGrid, bbox: BBox, width: int, height: int,
+              stops: np.ndarray | None = None) -> np.ndarray:
+    """The whole extent (level 0) at width x height, colored with the glow ramp."""
+    return glow_tile_rgba(grid, bbox, 0, 0, 0, width, height, stops)
 
 
 def write_png(rgba: np.ndarray, path: Path) -> None:
@@ -246,6 +271,33 @@ def write_land_borders(release: str, bbox: BBox, out_dir: Path) -> Path:
 
 # --- Region -----------------------------------------------------------------------
 
+def glow_tile_name(level: int, col: int, row: int, red: bool) -> str:
+    stem = "L0" if level == 0 else f"L{level}_{col}_{row}"
+    return f"{stem}{'_red' if red else ''}.png"
+
+
+def write_glow_levels(viirs: Path, metro_key: str, out: Path, width: int, height: int) -> None:
+    """The glow at every level, normal and red, from one darkness grid computed at STATIC_MAP_GLOW_RES_M with
+    VIIRS cubic-resampled; plus glow.png / glow_red.png (= level 0) for the render step."""
+    metro = METROS[metro_key]
+    bbox = metro.tiles_bbox
+    grid = build_darkness_grid(viirs, bbox, metro.utm_epsg, res_m=config.STATIC_MAP_GLOW_RES_M,
+                               resampling=Resampling.cubic)
+    glow = out / "glow"
+    glow.mkdir(parents=True, exist_ok=True)
+    for level in config.STATIC_MAP_LEVELS:
+        n = 2 ** level
+        for col in range(n):
+            for row in range(n):
+                sqm = glow_tile_sqm(grid, bbox, level, col, row, width, height)
+                for red, stops in ((False, None), (True, RED_STOPS)):
+                    rgba = sqm_to_rgba(sqm, stops)
+                    write_png(rgba, glow / glow_tile_name(level, col, row, red))
+                    if level == 0:
+                        write_png(rgba, out / ("glow_red.png" if red else "glow.png"))
+                del sqm
+
+
 def build_static_map_inputs(metro_key: str, viirs: Path, release: str, out_root: Path,
                             max_pixels: int = config.STATIC_MAP_MAX_PIXELS) -> Path:
     metro = METROS[metro_key]
@@ -253,11 +305,9 @@ def build_static_map_inputs(metro_key: str, viirs: Path, release: str, out_root:
     out = Path(out_root) / metro_key
     out.mkdir(parents=True, exist_ok=True)
     width, height = image_size(bbox, max_pixels)
-    grid = build_darkness_grid(Path(viirs), bbox, metro.utm_epsg, res_m=config.STATIC_MAP_GLOW_RES_M)
-    for name, stops in (("glow.png", None), ("glow_red.png", RED_STOPS)):
-        write_png(glow_rgba(grid, bbox, width, height, stops), out / name)
-    (out / "extent.json").write_text(json.dumps({"bounds": list(bbox), "width": width, "height": height}),
-                                     encoding="utf-8")
+    write_glow_levels(Path(viirs), metro_key, out, width, height)
+    (out / "extent.json").write_text(json.dumps({"bounds": list(bbox), "width": width, "height": height,
+                                                 "levels": list(config.STATIC_MAP_LEVELS)}), encoding="utf-8")
     write_labels(release, bbox, out)
     write_land_borders(release, bbox, out)
     return out

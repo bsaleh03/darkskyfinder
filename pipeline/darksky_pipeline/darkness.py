@@ -102,7 +102,10 @@ class DarknessGrid:
 
 def build_darkness_grid(viirs_path: Path, bbox: BBox, epsg: int,
                         res_m: float = config.GRID_RES_M, radius_m: float = config.SKYGLOW_RADIUS_M,
-                        exponent: float = config.SKYGLOW_EXPONENT, k: float = config.SKYGLOW_K) -> DarknessGrid:
+                        exponent: float = config.SKYGLOW_EXPONENT, k: float = config.SKYGLOW_K,
+                        resampling: Resampling = Resampling.average) -> DarknessGrid:
+    """`resampling` warps VIIRS onto the grid: average (spots) keeps cell totals; cubic (map glow on a grid finer
+    than VIIRS' ~450 m) interpolates smoothly instead of copying each VIIRS pixel into a block of cells."""
     projector = Projector(epsg)
     minx, miny, maxx, maxy = projector.bbox_xy(bbox)
     minx, miny = math.floor(minx / res_m) * res_m, math.floor(miny / res_m) * res_m
@@ -122,9 +125,9 @@ def build_darkness_grid(viirs_path: Path, bbox: BBox, epsg: int,
         reproject(source=data, destination=radiance,
                   src_transform=src.window_transform(window), src_crs=src.crs, src_nodata=src.nodata,
                   dst_transform=dst_transform, dst_crs=CRS.from_epsg(epsg), dst_nodata=np.nan,
-                  resampling=Resampling.average)
+                  resampling=resampling)
     radiance = np.nan_to_num(radiance, nan=0.0)
-    radiance[radiance < 0] = 0.0
+    radiance[radiance < 0] = 0.0  # also clamps cubic undershoot next to bright pixels
 
     glow = fftconvolve(radiance, skyglow_kernel(res_m, radius_m, exponent), mode="same")
     glow = glow[n:n + rows, n:n + cols]

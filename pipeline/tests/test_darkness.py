@@ -95,3 +95,13 @@ def test_edge_glow_from_outside_region(tmp_path, projector):
     east = grid.sample(*projector.to_xy(-84.01, 41.90))[0]
     west = grid.sample(*projector.to_xy(-84.39, 41.90))[0]
     assert west - east > 1.0
+
+
+def test_resampling_defaults_to_average_for_spots(viirs_path, darkness_grid):
+    import inspect
+    from rasterio.warp import Resampling
+    assert inspect.signature(build_darkness_grid).parameters["resampling"].default == Resampling.average
+    cubic = build_darkness_grid(viirs_path, REGION_BBOX, TEST_EPSG, resampling=Resampling.cubic)
+    assert cubic.sqm.shape == darkness_grid.sqm.shape
+    assert np.isfinite(cubic.sqm).all() and (cubic.radiance >= 0).all()
+    assert not np.array_equal(cubic.sqm, darkness_grid.sqm)
