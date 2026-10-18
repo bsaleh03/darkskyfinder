@@ -20,10 +20,19 @@ export const METROS: Region[] = [
   },
   {
     key: 'se_mi',
-    name: 'SE Michigan',
+    name: 'Michigan',
     bbox: [-84.6, 41.65, -82.4, 44.1],
     center: [-83.15, 42.48],
     zoom: 8.5,
     timezone: 'America/Detroit',
   },
 ]
+
+/**
+ * Area each metro's detailed basemap extract covers (pipeline config Metro.tiles_bbox); defaults to the
+ * spot bbox. Michigan's map covers the whole Lower Peninsula while spots stay in the southeast.
+ */
+export const METRO_MAP_BOUNDS: Record<string, [number, number, number, number]> = {
+  bay_area: [-123.2, 36.4, -121.0, 38.6],
+  se_mi: [-86.9, 41.65, -82.4, 45.9],
+}

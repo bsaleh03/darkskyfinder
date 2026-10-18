@@ -39,7 +39,7 @@ const isRedOrNeutral = (hex: string) => {
 const layer = (style: ReturnType<typeof buildStyle>, id: string) => {
   const l = style.layers.find((x) => x.id === id)
   if (!l) throw new Error(`missing layer ${id}`)
-  return l as unknown as { paint: Record<string, unknown>; layout?: Record<string, unknown>; minzoom?: number }
+  return l as unknown as { paint: Record<string, unknown>; layout?: Record<string, unknown>; minzoom?: number; maxzoom?: number; filter?: unknown }
 }
 
 describe('buildStyle', () => {
@@ -52,12 +52,96 @@ describe('buildStyle', () => {
           url: `pmtiles://https://t.example/tiles/${m}/basemap_${m}_${t}.pmtiles`,
         })
       }
-      expect(s.sources[`${m}-glow`]).toMatchObject({
+      expect(s.sources[`${m}-glow`]).toBeUndefined()
+    }
+  })
+
+  it('red mode uses the red-only glow tiles without greyscale tricks', () => {
+    const s = buildStyle({ ...base, red: true })
+    expect(s.sources['us-glow']).toMatchObject({ url: 'pmtiles://https://t.example/tiles/us/lightpollution_us_red.pmtiles' })
+    expect(layer(s, 'glow-us').paint['raster-saturation']).toBeUndefined()
+    expect(layer(s, 'glow-us').layout?.visibility).toBe('visible')
+  })
+
+  it('one lower-48 glow source covers the whole map, independent of metros', () => {
+    for (const metros of [['se_mi', 'bay_area'], []]) {
+      const s = buildStyle({ ...base, metros })
+      expect(s.sources['us-glow']).toMatchObject({
         type: 'raster',
-        url: `pmtiles://https://t.example/tiles/${m}/lightpollution_${m}.pmtiles`,
+        url: 'pmtiles://https://t.example/tiles/us/lightpollution_us.pmtiles',
         tileSize: 256,
       })
+      expect(s.layers.filter((l) => l.id.startsWith('glow')).map((l) => l.id)).toEqual(['glow-us'])
     }
+  })
+
+  it('metro basemaps only from z7, so the zoomed-out map is just the US glow (no tile-footprint blocks)', () => {
+    const s = buildStyle(base)
+    const metroLayers = s.layers.filter((l) => 'source' in l && base.metros.some((m) => String(l.source).startsWith(`${m}-`)))
+    expect(metroLayers.length).toBeGreaterThan(0)
+    for (const l of metroLayers) expect(l.minzoom ?? 0).toBeGreaterThanOrEqual(7)
+    expect(layer(s, 'road-minor-se_mi').minzoom).toBe(11) // stricter per-layer minzooms are kept
+    expect(layer(s, 'glow-us').minzoom).toBeUndefined()
+  })
+
+  it('US-wide borders: water background, land shapes, country/state lines and state names at every zoom', () => {
+    for (const metros of [['se_mi', 'bay_area'], []]) {
+      const s = buildStyle({ ...base, metros })
+      expect(s.sources['us-divisions']).toMatchObject({
+        type: 'vector',
+        url: 'pmtiles://https://t.example/tiles/us/basemap_us_divisions.pmtiles',
+      })
+      const ids = s.layers.map((l) => l.id)
+      expect(ids.slice(0, 2)).toEqual(['background', 'land-us'])
+      expect(layer(s, 'background').paint['background-color']).toBe('#0C1734') // water
+      expect(layer(s, 'land-us').filter).toEqual(['==', ['get', 'class'], 'land'])
+      for (const id of ['boundaries-country-us', 'boundaries-region-us', 'labels-regions-us']) {
+        expect(ids).toContain(id)
+        expect(layer(s, id).minzoom ?? 0).toBeLessThan(7)
+      }
+      expect(ids.indexOf('glow-us')).toBeLessThan(ids.indexOf('boundaries-region-us'))
+      expect(layer(s, 'labels-regions-us').maxzoom).toBe(7) // metro labels take over when zoomed in
+    }
+  })
+
+  it('state/country borders come from the land-only GeoJSON at every zoom (no lines through lakes)', () => {
+    const s = buildStyle(base)
+    expect(s.sources['us-borders']).toMatchObject({ type: 'geojson', data: 'https://t.example/tiles/us/borders.geojson' })
+    expect(s.sources['us-state-lines']).toBeUndefined()
+    const filters: [string, unknown][] = [
+      ['boundaries-region-us', ['all', ['==', ['get', 'subtype'], 'region'], ['!', ['get', 'water']]]],
+      ['boundaries-country-us', ['all', ['==', ['get', 'subtype'], 'country'], ['!', ['get', 'water']]]],
+      ['boundaries-country-water-us', ['all', ['==', ['get', 'subtype'], 'country'], ['get', 'water']]],
+    ]
+    for (const [id, filter] of filters) {
+      const l = layer(s, id) as unknown as { source: string; filter: unknown; minzoom?: number; maxzoom?: number }
+      expect(l.source).toBe('us-borders')
+      expect(l.filter).toEqual(filter)
+      expect(l.minzoom).toBeUndefined()
+      expect(l.maxzoom).toBeUndefined()
+    }
+    expect(s.layers.some((l) => 'source-layer' in l && l['source-layer'] === 'division_boundary' && l.id.endsWith('-us'))).toBe(false)
+    // Over water the country border is drawn dashed and fainter than on land.
+    const water = layer(s, 'boundaries-country-water-us')
+    expect(water.paint['line-dasharray']).toBeDefined()
+    expect(layer(s, 'boundaries-country-us').paint['line-dasharray']).toBeUndefined()
+    expect(water.paint['line-opacity']).toBeLessThan(1)
+
+  })
+
+  it('metro county lines sit under the metro water, and states/countries are left to the GeoJSON', () => {
+    const s = buildStyle(base)
+    const ids = s.layers.map((l) => l.id)
+    for (const m of base.metros) {
+      expect(layer(s, `boundaries-${m}`).filter).toEqual(['all', ['==', ['get', 'class'], 'land'], ['==', ['get', 'subtype'], 'county']])
+      expect(ids.indexOf(`boundaries-${m}`)).toBeLessThan(ids.indexOf(`water-${m}`))
+    }
+  })
+
+  it('metro sources carry their bbox as bounds, so other metros never get tile requests for this area', () => {
+    const s = buildStyle(base)
+    expect(s.sources['se_mi-base']).toMatchObject({ bounds: [-86.9, 41.65, -82.4, 45.9] }) // whole Lower Peninsula map
+    expect(s.sources['bay_area-transportation']).toMatchObject({ bounds: [-123.2, 36.4, -121.0, 38.6] })
   })
 
   it('glow layer below first road layer and hidden when glow=false', () => {
@@ -67,19 +151,25 @@ describe('buildStyle', () => {
     const road = ids.findIndex((i) => i.startsWith('road'))
     expect(glow).toBeGreaterThan(-1)
     expect(glow).toBeLessThan(road)
-    expect(layer(s, 'glow-se_mi').layout?.visibility).toBe('visible')
-    expect(layer(s, 'glow-se_mi').paint['raster-opacity']).toBe(0.55)
+    expect(layer(s, 'glow-us').layout?.visibility).toBe('visible')
+    expect(layer(s, 'glow-us').paint['raster-opacity']).toBe(0.55)
     const off = buildStyle({ ...base, glow: false })
-    expect(layer(off, 'glow-se_mi').layout?.visibility).toBe('none')
+    expect(layer(off, 'glow-us').layout?.visibility).toBe('none')
   })
 
   it('buildings minzoom 13', () => {
     expect(layer(buildStyle(base), 'buildings-se_mi').minzoom).toBe(13)
   })
 
+  it('no land_cover layers: ESA-derived shapes are pixel-blocky and read as water patches', () => {
+    const s = buildStyle(base)
+    expect(s.layers.filter((l) => 'source-layer' in l && l['source-layer'] === 'land_cover')).toEqual([])
+  })
+
   it('moonlit colors match spec', () => {
     const s = buildStyle(base)
-    expect(layer(s, 'background').paint['background-color']).toBe('#141A2E')
+    expect(layer(s, 'background').paint['background-color']).toBe('#0C1734') // water; land comes from land-us
+    expect(layer(s, 'land-us').paint['fill-color']).toBe('#141A2E')
     expect(layer(s, 'land-se_mi').paint['fill-color']).toBe('#141A2E')
     expect(layer(s, 'water-se_mi').paint['fill-color']).toBe('#0C1734')
     expect(layer(s, 'landuse-parks-se_mi').paint['fill-color']).toBe('#18302A')
@@ -141,8 +231,8 @@ describe('attribution', () => {
       }
       expect(src[`${m}-transportation`].attribution).toContain('TomTom')
       expect(src[`${m}-base`].attribution).toContain('ESA WorldCover')
-      expect(src[`${m}-glow`].attribution).toContain('VIIRS VNL, EOG / Colorado School of Mines')
     }
+    expect(src['us-glow'].attribution).toContain('VIIRS VNL, EOG / Colorado School of Mines')
   })
 
   it('attribution links open safely in a new tab', () => {

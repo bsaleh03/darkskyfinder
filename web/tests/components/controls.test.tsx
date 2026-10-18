@@ -81,23 +81,34 @@ describe('Controls', () => {
     expect(screen.getByRole('radio', { name: 'Verified only' })).toBeInTheDocument()
   })
 
-  it('Canada switch only in se_mi and maps to border', async () => {
+  it('Canada switch hidden behind More filters in se_mi and maps to border', async () => {
     const onChange = setup()
     const user = userEvent.setup()
+    expect(screen.queryByRole('switch', { name: 'Include Canada' })).toBeNull()
+    const more = screen.getByRole('button', { name: 'More filters' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    await user.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
     const sw = screen.getByRole('switch', { name: 'Include Canada' })
+    expect(more.getAttribute('aria-controls')).toBe(sw.closest('[id]')?.id)
     expect(sw).toHaveAttribute('aria-checked', 'true')
     await user.click(sw)
     expect(onChange).toHaveBeenLastCalledWith({ border: 'exclude' })
+    await user.click(more)
+    expect(screen.queryByRole('switch', { name: 'Include Canada' })).toBeNull()
   })
 
-  it('Canada switch absent elsewhere and reflects exclude', async () => {
+  it('no More filters outside se_mi; active count shown when Canada excluded', async () => {
     const { unmount } = render(
-      <Controls state={base} metro="sf_bay" showVerified={false} onChange={vi.fn()} />,
+      <Controls state={base} metro="bay_area" showVerified={false} onChange={vi.fn()} />,
     )
+    expect(screen.queryByRole('button', { name: /More filters/ })).toBeNull()
     expect(screen.queryByRole('switch')).toBeNull()
     unmount()
     const onChange = vi.fn()
     render(<Controls state={{ ...base, border: 'exclude' }} metro="se_mi" showVerified={false} onChange={onChange} />)
+    const more = screen.getByRole('button', { name: 'More filters (1 on)' })
+    await userEvent.setup().click(more)
     const sw = screen.getByRole('switch', { name: 'Include Canada' })
     expect(sw).toHaveAttribute('aria-checked', 'false')
     await userEvent.setup().click(sw)

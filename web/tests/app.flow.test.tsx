@@ -38,7 +38,7 @@ const fetchHealth = vi.mocked(client.fetchHealth)
 const fetchSearch = vi.mocked(client.fetchSearch)
 
 const REGIONS: Region[] = [
-  { key: 'se_mi', name: 'SE Michigan', bbox: [-84.6, 41.65, -82.4, 44.1], center: [-83.15, 42.48], zoom: 8.5, timezone: 'America/Detroit' },
+  { key: 'se_mi', name: 'Michigan', bbox: [-84.6, 41.65, -82.4, 44.1], center: [-83.15, 42.48], zoom: 8.5, timezone: 'America/Detroit' },
   { key: 'bay_area', name: 'SF Bay Area', bbox: [-123.2, 36.4, -121.0, 38.6], center: [-122.27, 37.8], zoom: 8.5, timezone: 'America/Los_Angeles' },
 ]
 
@@ -133,7 +133,7 @@ describe('App flow', () => {
     expect(screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Search for a place' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Use my location' })).toBeInTheDocument()
-    const chip = await screen.findByRole('button', { name: 'SE Michigan' })
+    const chip = await screen.findByRole('button', { name: 'Michigan' })
     expect(screen.getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()
     fireEvent.click(chip)
     expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'se_mi')
@@ -194,9 +194,9 @@ describe('App flow', () => {
     go('/?lat=40.7&lon=-74')
     fetchSpots.mockRejectedValue(new ApiError('out_of_coverage', 422, { error: 'out_of_coverage' }))
     render(<App />)
-    expect(await screen.findByText('We cover SE Michigan and the SF Bay Area so far.')).toBeInTheDocument()
+    expect(await screen.findByText('We cover southeast Michigan and the SF Bay Area so far.')).toBeInTheDocument()
     const chips = screen.getByRole('group', { name: 'Regions' })
-    expect(within(chips).getByRole('button', { name: 'SE Michigan' })).toBeInTheDocument()
+    expect(within(chips).getByRole('button', { name: 'Michigan' })).toBeInTheDocument()
     fireEvent.click(within(chips).getByRole('button', { name: 'SF Bay Area' }))
     expect(window.location.search).not.toContain('lat=')
     expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'bay_area')
@@ -276,7 +276,7 @@ describe('App flow', () => {
     expect(await screen.findByText('Great night for stars.')).toBeInTheDocument()
   })
 
-  it('red mode forces glow off without touching the URL; leaving it restores the setting', async () => {
+  it('red mode keeps the glow on without touching the URL', async () => {
     go(START)
     fetchSpots.mockResolvedValue(response())
     render(<App />)
@@ -285,7 +285,7 @@ describe('App flow', () => {
     const before = window.history.length
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
     expect(document.documentElement.dataset.red).toBe('true')
-    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'false')
+    expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'true')
     expect(mapProps.current?.red).toBe(true)
     expect(window.location.search).toBe('?lat=42.49&lon=-83.14')
     expect(window.history.length).toBe(before)
@@ -293,7 +293,7 @@ describe('App flow', () => {
     expect(screen.getByTestId('map')).toHaveAttribute('data-glow', 'true')
   })
 
-  it('a glow=0 URL stays off after leaving red mode', async () => {
+  it('a glow=0 URL stays off in and out of red mode', async () => {
     go(`${START}&glow=0`)
     localStorage.setItem('dsf.red', '1')
     fetchSpots.mockResolvedValue(response())
@@ -325,6 +325,10 @@ describe('App flow', () => {
   })
 
   it('a session of filter changes stays well under the /spots rate limit', async () => {
+    // Pin "now" to the fixture's evening: on a later real date the night chips shift once the API's tonight
+    // arrives, which (correctly) costs one extra dot request and would make the counts date-dependent.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-17T21:00:00-04:00'))
     go(START)
     fetchSpots.mockResolvedValue(response())
     const qc = makeQueryClient()
@@ -358,6 +362,7 @@ describe('App flow', () => {
       expect(total()).toBeLessThanOrEqual(14)
     } finally {
       await qc.cancelQueries()
+      vi.useRealTimers()
     }
   })
 
@@ -383,9 +388,9 @@ describe('App flow', () => {
     fetchHealth.mockReturnValue(new Promise(() => {}))
     render(<App />)
     const chips = screen.getByRole('group', { name: 'Regions' })
-    expect(within(chips).getByRole('button', { name: 'SE Michigan' })).toBeInTheDocument()
+    expect(within(chips).getByRole('button', { name: 'Michigan' })).toBeInTheDocument()
     expect(within(chips).getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()
-    fireEvent.click(within(chips).getByRole('button', { name: 'SE Michigan' }))
+    fireEvent.click(within(chips).getByRole('button', { name: 'Michigan' }))
     expect(screen.getByTestId('map')).toHaveAttribute('data-focus', 'se_mi')
     expect(mapProps.current?.regions.map((r) => r.key).sort()).toEqual(['bay_area', 'se_mi'])
     expect(screen.queryByText('Waking up the stargazing engine…')).toBeNull()
@@ -427,9 +432,9 @@ describe('App flow', () => {
     Object.defineProperty(navigator, 'geolocation', { value: geo, configurable: true })
     try {
       render(<App />)
-      await screen.findByRole('button', { name: 'SE Michigan' })
+      await screen.findByRole('button', { name: 'Michigan' })
       fireEvent.click(screen.getByRole('button', { name: 'Use my location' }))
-      expect(screen.getByText('We cover SE Michigan and the SF Bay Area so far.')).toBeInTheDocument()
+      expect(screen.getByText('We cover southeast Michigan and the SF Bay Area so far.')).toBeInTheDocument()
       expect(window.location.search).not.toContain('lat=')
       expect(screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })).toBeInTheDocument()
       expect(within(screen.getByRole('group', { name: 'Regions' })).getByRole('button', { name: 'SF Bay Area' })).toBeInTheDocument()

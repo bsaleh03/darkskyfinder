@@ -32,7 +32,7 @@ function makeMap() {
     addLayer: vi.fn(),
     getLayer: vi.fn((id: string) => (s.layersPresent && id.startsWith('glow-') ? {} : undefined)),
     getSource: vi.fn(() => ({ setData: s.sourceSetData })),
-    getStyle: vi.fn(() => ({ layers: [{ id: 'glow-se_mi' }, { id: 'land-se_mi' }] })),
+    getStyle: vi.fn(() => ({ layers: [{ id: 'glow-us' }, { id: 'land-se_mi' }] })),
     isStyleLoaded: vi.fn(() => s.styleLoaded),
     setStyle: vi.fn(),
     setLayoutProperty: vi.fn(),
@@ -140,7 +140,7 @@ test('glow-only change applies even when isStyleLoaded is false but layers exist
   const { rerender } = render(<MapView {...base} />)
   h.state.styleLoaded = false
   rerender(<MapView {...base} glow={false} />)
-  expect(h.state.map.setLayoutProperty).toHaveBeenCalledWith('glow-se_mi', 'visibility', 'none')
+  expect(h.state.map.setLayoutProperty).toHaveBeenCalledWith('glow-us', 'visibility', 'none')
 })
 
 test('unmount cancels the pending dragend timer', () => {
@@ -160,13 +160,13 @@ test('glow-only change sets layer visibility, not setStyle; deferred until layer
   rerender(<MapView {...base} glow={false} />)
   expect(h.state.map.setStyle).not.toHaveBeenCalled()
   expect(h.state.map.setLayoutProperty).toHaveBeenCalledTimes(1)
-  expect(h.state.map.setLayoutProperty).toHaveBeenCalledWith('glow-se_mi', 'visibility', 'none')
+  expect(h.state.map.setLayoutProperty).toHaveBeenCalledWith('glow-us', 'visibility', 'none')
   h.state.layersPresent = false
   rerender(<MapView {...base} glow />)
   expect(h.state.map.setLayoutProperty).toHaveBeenCalledTimes(1)
   h.state.layersPresent = true
   fire('style.load') // applies current glow state
-  expect(h.state.map.setLayoutProperty).toHaveBeenLastCalledWith('glow-se_mi', 'visibility', 'visible')
+  expect(h.state.map.setLayoutProperty).toHaveBeenLastCalledWith('glow-us', 'visibility', 'visible')
 })
 
 test('desktop click sets start immediately', () => {
@@ -261,17 +261,17 @@ test('glow button calls back', async () => {
   expect(base.onToggleGlow).toHaveBeenCalled()
 })
 
-test('red mode forces glow off: button disabled with an explanation, raster hidden', () => {
-  const { rerender } = render(<MapView {...base} red />)
+test('red mode keeps the glow (red-only tiles) and its toggle', async () => {
+  render(<MapView {...base} red />)
   const btn = screen.getByRole('button', { name: /glow/i })
-  expect(btn).toBeDisabled()
-  expect(btn).toHaveAttribute('aria-pressed', 'false')
-  expect(btn).toHaveAccessibleDescription('Glow is off in red mode')
-  expect(btn).toHaveAttribute('title', 'Glow is off in red mode')
-  const style = vi.mocked(maplibregl.Map).mock.calls[0][0].style as { layers: { id: string; layout?: { visibility?: string } }[] }
-  expect(style.layers.find((l) => l.id === 'glow-se_mi')?.layout?.visibility).toBe('none')
-  rerender(<MapView {...base} />)
-  expect(screen.getByRole('button', { name: /glow/i })).toBeEnabled()
-  expect(screen.getByRole('button', { name: /glow/i })).toHaveAttribute('aria-pressed', 'true')
-  expect(screen.getByRole('button', { name: /glow/i })).not.toHaveAttribute('title')
+  expect(btn).toBeEnabled()
+  expect(btn).toHaveAttribute('aria-pressed', 'true')
+  const style = vi.mocked(maplibregl.Map).mock.calls[0][0].style as {
+    sources: Record<string, { url?: string }>
+    layers: { id: string; layout?: { visibility?: string } }[]
+  }
+  expect(style.layers.find((l) => l.id === 'glow-us')?.layout?.visibility).toBe('visible')
+  expect(style.sources['us-glow'].url).toMatch(/lightpollution_us_red\.pmtiles$/)
+  await userEvent.click(btn)
+  expect(base.onToggleGlow).toHaveBeenCalled()
 })

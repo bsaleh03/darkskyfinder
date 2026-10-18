@@ -243,7 +243,7 @@ function Main() {
           spots={data?.spots ?? []}
           start={start}
           selectedId={state.spot}
-          glow={state.glow && !red}
+          glow={state.glow}
           red={red}
           regions={regions}
           focusRegion={focus ?? metro ?? undefined}

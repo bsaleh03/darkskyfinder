@@ -18,11 +18,18 @@ class Metro:
     utm_epsg: int
     reference_home: tuple[float, float]  # lon, lat of a typical bright home location
     reference_home_label: str
+    # Area of the detailed basemap extract; defaults to bbox. Spots, darkness and search always use bbox.
+    map_bbox: BBox | None = None
+
+    @property
+    def tiles_bbox(self) -> BBox:
+        return self.map_bbox or self.bbox
 
 
 METROS: dict[str, Metro] = {
-    "se_mi": Metro("se_mi", "SE Michigan", (-84.6, 41.65, -82.4, 44.1), 32617,
-                   (-83.1446, 42.4895), "Royal Oak"),
+    # Spots cover southeast Michigan; the detailed map covers the whole Lower Peninsula.
+    "se_mi": Metro("se_mi", "Michigan", (-84.6, 41.65, -82.4, 44.1), 32617,
+                   (-83.1446, 42.4895), "Royal Oak", map_bbox=(-86.9, 41.65, -82.4, 45.9)),
     "bay_area": Metro("bay_area", "SF Bay Area", (-123.2, 36.4, -121.0, 38.6), 32610,
                       (-122.4194, 37.7749), "San Francisco"),
 }
@@ -125,6 +132,17 @@ VERIFIED_MIN_GAIN_MAG = 1.0
 OVERTURE_TILES_URL = "https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/{release}/{theme}.pmtiles"
 OVERTURE_TILE_THEMES = ("base", "transportation", "buildings", "divisions")
 LIGHTPOLLUTION_BRIGHT_SQM = 17.0  # SQM rendered at full brightness in the overlay
+# The map's glow overlay covers the lower 48 (display only; spot darkness still uses the per-metro grids).
+US_GLOW_BBOX: BBox = (-126.0, 23.5, -65.5, 50.5)
+US_GLOW_EPSG = 5070  # NAD83 / Conus Albers (equal-area)
+US_GLOW_RES_M = 1_000  # sky glow is smooth; 1 km keeps the CONUS grid ~15M cells
+US_GLOW_ZOOMS = (3, 9)
+# Overture divisions (land shapes, country/state borders, state names) for the map beyond the metros.
+US_BORDERS_BBOX: BBox = (-130.0, 18.0, -60.0, 62.0)
+US_BORDERS_MAXZOOM = 7
+US_BORDER_COUNTRIES = frozenset({"US", "CA", "MX"})
+US_BORDER_SIMPLIFY_DEG = 0.001  # ~100 m: fine to ~z11, keeps borders.geojson under ~1 MB
+US_BORDER_LAND_SLACK_DEG = 0.003  # land shapes grown ~300 m before cutting, so land borders stay continuous
 
 # --- Search -------------------------------------------------------------------
 # Street addresses are excluded so each metro's index stays small enough to ship

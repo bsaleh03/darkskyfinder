@@ -8,7 +8,7 @@ interface Props {
   onPick: (key: string) => void
 }
 
-/** SE Michigan / SF Bay Area chips: pick one to fly the map there. */
+/** Michigan / SF Bay Area chips: pick one to fly the map there. */
 export function RegionChips({ regions, active, onPick }: Props) {
   if (regions.length === 0) return null
   return (

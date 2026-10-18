@@ -1,10 +1,11 @@
-import maplibregl, { type Map as MlMap, type Marker } from 'maplibre-gl'
+import maplibregl, { type AddProtocolAction, type Map as MlMap, type Marker } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { Protocol } from 'pmtiles'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Region, Spot } from '../api/types'
 import { config } from '../config'
 import { toRed } from './color'
+import { withRetry } from './retry'
 import { regionBounds, styleChange, unionBounds } from './helpers'
 import './MapView.css'
 import { PIN_COLORS, spotsToGeoJSON } from './pins'
@@ -27,13 +28,12 @@ const SRC = 'spots'
 const PIN_LAYERS = ['spots-ring', 'spots-pin']
 const AMBER = '#F5C96B'
 const VIOLET = '#A58BE0'
-const GLOW_RED_NOTE = 'Glow is off in red mode'
 
 let protocolRegistered = false
 function registerPmtiles() {
   if (protocolRegistered) return
   protocolRegistered = true
-  maplibregl.addProtocol('pmtiles', new Protocol().tile)
+  maplibregl.addProtocol('pmtiles', withRetry(new Protocol().tile as AddProtocolAction))
 }
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -72,9 +72,7 @@ function addPins(map: MlMap, data: GeoJSON.FeatureCollection, red: boolean) {
 
 export function MapView(props: MapViewProps) {
   const { spots, start, selectedId, red, regions, focusRegion } = props
-  // Red mode never shows the glow raster; the user's glow setting comes back when red mode ends.
-  const glow = props.glow && !red
-  const glowNoteId = useId()
+  const { glow } = props
   const box = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MlMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
@@ -104,7 +102,7 @@ export function MapView(props: MapViewProps) {
     map.on('style.load', () => {
       const p = latest.current
       addPins(map, spotsToGeoJSON(p.spots, p.selectedId), p.red)
-      applyGlow(map, p.glow && !p.red)
+      applyGlow(map, p.glow)
     })
     map.on('click', (e) => {
       const target = e.originalEvent?.target
@@ -209,18 +207,10 @@ export function MapView(props: MapViewProps) {
         type="button"
         className="map-glow-btn"
         aria-pressed={glow}
-        disabled={red}
-        aria-describedby={red ? glowNoteId : undefined}
-        title={red ? GLOW_RED_NOTE : undefined}
         onClick={props.onToggleGlow}
       >
         Light pollution glow
       </button>
-      {red && (
-        <span id={glowNoteId} className="sr-only">
-          {GLOW_RED_NOTE}
-        </span>
-      )}
       {pending && (
         <div className="map-toast" role="alertdialog" aria-label="Confirm start location">
           <span>Set start here?</span>

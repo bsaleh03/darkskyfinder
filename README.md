@@ -1,8 +1,9 @@
 # Dark Sky Finder
 
 Where's the closest dark sky tonight? Enter a starting point and a night, and Dark Sky Finder rates the
-stargazing conditions (sky darkness, moon, clouds) and ranks nearby dark spots by drive time. It covers
-SE Michigan and the SF Bay Area so far.
+stargazing conditions (sky darkness, moon, clouds) and ranks nearby dark spots by drive time. Spots cover
+southeast Michigan and the SF Bay Area so far; the map shows light pollution across the lower 48, with
+full street detail for Michigan's Lower Peninsula and the Bay Area.
 
 ## How it works
 
@@ -84,15 +85,17 @@ the Render secrets yourself; no credentials are stored in this repo.
 2. **R2 bucket**: create bucket `darksky-tiles`, enable the public `r2.dev` URL, and apply the CORS policy
    in `scripts/r2-cors.json` (bucket Settings, CORS Policy). Replace the placeholder
    `https://darksky-web.onrender.com` origin with your real site URL if it differs.
-3. **Upload tiles** (about 2.3 GB, 10 files). Create an R2 API token (Object Read & Write) and configure
+3. **Upload tiles** (about 2.5 GB, 12 files). Create an R2 API token (Object Read & Write) and configure
    rclone once: `rclone config`, new remote named `r2`, storage `s3`, provider `Cloudflare`, enter the access
    key and secret, endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. Then:
    ```bash
-   scripts/upload_tiles.sh --dry-run   # lists exactly the 10 .pmtiles files
+   scripts/upload_tiles.sh --dry-run   # lists exactly the 12 map files
    scripts/upload_tiles.sh
    ```
-   The script uploads only `basemap_*` and `lightpollution_*` `.pmtiles` files to `r2:darksky-tiles/<metro>/`
-   and refuses anything else. The API's data files ship with the API (`api/data`), not via R2.
+   The script uploads only the metro `basemap_*` files to `r2:darksky-tiles/<metro>/` and the US-wide
+   `lightpollution_us.pmtiles`, `lightpollution_us_red.pmtiles`, `basemap_us_divisions.pmtiles` and
+   `borders.geojson` (uploaded gzipped with `Content-Encoding: gzip`; built by `python -m darksky_pipeline.us_glow
+   --viirs data/viirs/vnl_annual.tif --tiles-release <release>`) to `r2:darksky-tiles/us/`, and refuses anything else. The API's data files ship with the API (`api/data`), not via R2.
 4. **Render Blueprint**: New > Blueprint, pick the repo; it reads `render.yaml` and creates `darksky-api`
    and `darksky-web`. When prompted, enter the secrets:
    - `darksky-api`: `ORS_API_KEY` (OpenRouteService key), `ALLOWED_ORIGINS` (the static site URL, comma-separated

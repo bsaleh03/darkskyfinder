@@ -75,13 +75,27 @@
   padding: 0 8px;
 }
 
-.controls-switch {
+.controls-switch,
+.controls-more {
   align-self: flex-start;
+}
+
+.controls-more[aria-expanded="true"] {
+  border-color: var(--muted);
+}
+
+.controls-more-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--glass-border);
 }
 
 .controls-slider:focus-visible,
 .seg-btn:focus-visible,
-.controls-switch:focus-visible {
+.controls-switch:focus-visible,
+.controls-more:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }

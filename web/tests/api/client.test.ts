@@ -121,7 +121,7 @@ describe('api client', () => {
 
   it('errorMessage copy', () => {
     const m = (kind: ApiError['kind']) => errorMessage(new ApiError(kind))
-    expect(m('out_of_coverage')).toBe('We cover SE Michigan and the SF Bay Area so far.')
+    expect(m('out_of_coverage')).toBe('We cover southeast Michigan and the SF Bay Area so far.')
     expect(m('rate_limited')).toBe('Too many searches — try again in a minute.')
     expect(m('night_out_of_range')).toBe('Forecasts cover tonight and the next 6 nights — pick one of those.')
     expect(m('invalid')).toBe('That search didn’t look right. Check the location and try again.')

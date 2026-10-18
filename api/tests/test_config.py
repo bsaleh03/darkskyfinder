@@ -57,3 +57,9 @@ def test_schema_and_home_country():
 
     assert SCHEMA_VERSION == 3
     assert all(m.home_country == "US" for m in METROS.values())
+
+
+def test_michigan_is_shown_as_michigan():
+    from darksky_api.config import METROS
+    assert METROS["se_mi"].name == "Michigan"  # display name; key and spot bbox unchanged
+    assert METROS["se_mi"].bbox == (-84.6, 41.65, -82.4, 44.1)

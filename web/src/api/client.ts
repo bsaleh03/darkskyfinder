@@ -27,7 +27,7 @@ const GENERIC = 'Something went wrong. Check your connection and try again.'
 export function errorMessage(e: ApiError): string {
   switch (e.kind) {
     case 'out_of_coverage':
-      return 'We cover SE Michigan and the SF Bay Area so far.'
+      return 'We cover southeast Michigan and the SF Bay Area so far.'
     case 'rate_limited':
       return 'Too many searches — try again in a minute.'
     case 'night_out_of_range':

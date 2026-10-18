@@ -41,3 +41,12 @@ def test_wkb_to_geoms_accepts_bytearray():
     wkb = shapely.to_wkb(shapely.Point(1, 2))
     geoms = wkb_to_geoms(pd.Series([bytearray(wkb), wkb]))
     assert [g.x for g in geoms] == [1.0, 1.0]
+
+
+def test_se_mi_map_tiles_cover_the_lower_peninsula_but_spots_stay_southeast():
+    from darksky_pipeline.config import METROS
+    m = METROS["se_mi"]
+    w, s, e, n = m.tiles_bbox
+    assert w <= -86.5 and n >= 45.8 and s <= m.bbox[1] and e >= m.bbox[2]  # Lake Michigan shore to Mackinaw City
+    assert m.bbox == (-84.6, 41.65, -82.4, 44.1)  # spots, darkness and search unchanged
+    assert METROS["bay_area"].tiles_bbox == METROS["bay_area"].bbox

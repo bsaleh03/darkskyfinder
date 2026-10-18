@@ -15,7 +15,9 @@ from .darkness import DarknessGrid
 
 # t (0 = natural sky, 1 = city) -> RGBA. Indigo/violet/amber palette from the spec.
 _COLOR_STOPS = np.array([
-    [0.0, 0, 0, 0, 0],
+    # Transparent end carries the faint-glow colour, not black: otherwise near-transparent pixels (and
+    # downsampled tile edges) are dark and lay a dark film over the basemap.
+    [0.0, 58, 47, 110, 0],
     [0.2, 58, 47, 110, 90],
     [0.5, 165, 139, 224, 140],
     [0.8, 245, 201, 107, 190],
@@ -32,18 +34,29 @@ def basemap_extract_commands(tiles_release: str, bbox: BBox, out_dir: Path, metr
             for theme in config.OVERTURE_TILE_THEMES]
 
 
-def sqm_to_rgba(sqm: np.ndarray) -> np.ndarray:
+# Red-mode variant: same alpha as _COLOR_STOPS, hue limited to reds so the glow keeps night vision.
+RED_STOPS = np.array([
+    [0.0, 120, 8, 6, 0],
+    [0.2, 120, 8, 6, 90],
+    [0.5, 190, 20, 15, 140],
+    [0.8, 240, 45, 35, 190],
+    [1.0, 255, 80, 70, 220],
+], dtype=np.float64)
+
+
+def sqm_to_rgba(sqm: np.ndarray, stops: np.ndarray | None = None) -> np.ndarray:
+    stops = _COLOR_STOPS if stops is None else stops
     sqm = np.asarray(sqm, dtype=np.float64)
     span = config.NATURAL_SQM - config.LIGHTPOLLUTION_BRIGHT_SQM
     t = np.clip((config.NATURAL_SQM - np.nan_to_num(sqm, nan=config.NATURAL_SQM)) / span, 0.0, 1.0)
     out = np.empty(sqm.shape + (4,), dtype=np.uint8)
     for ch in range(4):
-        out[..., ch] = np.round(np.interp(t, _COLOR_STOPS[:, 0], _COLOR_STOPS[:, ch + 1])).astype(np.uint8)
+        out[..., ch] = np.round(np.interp(t, stops[:, 0], stops[:, ch + 1])).astype(np.uint8)
     return out
 
 
-def write_lightpollution_tif(grid: DarknessGrid, path: Path) -> None:
-    rgba = sqm_to_rgba(grid.sqm)
+def write_lightpollution_tif(grid: DarknessGrid, path: Path, stops: np.ndarray | None = None) -> None:
+    rgba = sqm_to_rgba(grid.sqm, stops)
     h, w = grid.sqm.shape
     with rasterio.open(path, "w", driver="GTiff", height=h, width=w, count=4, dtype="uint8",
                        crs=CRS.from_epsg(grid.epsg), transform=from_origin(grid.x0, grid.y0, grid.res, grid.res),

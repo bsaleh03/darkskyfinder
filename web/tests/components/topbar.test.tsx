@@ -58,7 +58,7 @@ describe('SearchBox', () => {
     const options = screen.getAllByRole('option')
     expect(options).toHaveLength(2)
     expect(options[0]).toHaveTextContent('Royal Oak')
-    expect(options[0]).toHaveTextContent('Locality · SE Michigan')
+    expect(options[0]).toHaveTextContent('Locality · Michigan')
     expect(options[1]).toHaveTextContent('Locality · SF Bay Area')
     expect(input).toHaveAttribute('aria-expanded', 'true')
     expect(input).toHaveAttribute('aria-controls', screen.getByRole('listbox').id)
@@ -181,14 +181,14 @@ describe('RedModeToggle', () => {
 
 describe('MetroSwitch', () => {
   const regions: Region[] = [
-    { key: 'se_mi', name: 'SE Michigan', bbox: [], center: [], zoom: 8, timezone: 'x' },
+    { key: 'se_mi', name: 'Michigan', bbox: [], center: [], zoom: 8, timezone: 'x' },
     { key: 'bay_area', name: 'SF Bay Area', bbox: [], center: [], zoom: 8, timezone: 'x' },
   ]
   it('metro switch lists regions', () => {
     const onChange = vi.fn()
     render(<MetroSwitch regions={regions} value="se_mi" onChange={onChange} />)
     const opts = screen.getAllByRole('option')
-    expect(opts.map((o) => o.textContent)).toEqual(['SE Michigan', 'SF Bay Area'])
+    expect(opts.map((o) => o.textContent)).toEqual(['Michigan', 'SF Bay Area'])
     expect(screen.getByRole('combobox')).toHaveValue('se_mi')
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'bay_area' } })
     expect(onChange).toHaveBeenCalledWith('bay_area')

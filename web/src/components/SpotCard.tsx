@@ -6,7 +6,7 @@ import { DarknessScale } from './DarknessScale'
 import { DirectionsButton } from './DirectionsButton'
 import { ExpertNumbers } from './ExpertNumbers'
 import { NightScrubber } from './NightScrubber'
-import { SkyPreview } from './SkyPreview'
+import { SkyPreview, seedFrom } from './SkyPreview'
 import { SourcesList } from './SourcesList'
 import './SpotCard.css'
 
@@ -21,6 +21,7 @@ interface Props {
 
 export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezone }: Props) {
   const panelId = useId()
+  const seed = seedFrom(spot.id)
   const drive = `${spot.drive_is_estimate ? '≈' : ''}${Math.round(spot.drive_minutes)} min`
   return (
     <article className={`spot-card${spot.unavailable ? ' spot-card--unavailable' : ''}`} data-spot-id={spot.id}>
@@ -40,7 +41,7 @@ export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezon
             </span>
           )}
         </span>
-        <SkyPreview sqm={spot.sqm} label={`Sky preview, ${spot.sky_label}`} />
+        <SkyPreview sqm={spot.sqm} label={`Sky preview, ${spot.sky_label}`} seed={seed} />
       </button>
       <div id={panelId} className="spot-body" hidden={!expanded}>
         {expanded && (
@@ -50,12 +51,12 @@ export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezon
               <div className="spot-compare">
                 {homeSqm !== null && Number.isFinite(homeSqm) && (
                   <figure>
-                    <SkyPreview sqm={homeSqm} label={`${homeLabel} sky`} size="large" />
+                    <SkyPreview sqm={homeSqm} label={`${homeLabel} sky`} size="large" seed={seed} />
                     <figcaption>{homeLabel}</figcaption>
                   </figure>
                 )}
                 <figure>
-                  <SkyPreview sqm={spot.sqm} label="Spot sky" size="large" />
+                  <SkyPreview sqm={spot.sqm} label="Spot sky" size="large" seed={seed} />
                   <figcaption>This spot</figcaption>
                 </figure>
               </div>

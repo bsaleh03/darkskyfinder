@@ -112,14 +112,16 @@
 }
 
 .sky-preview--thumb {
-  width: 84px;
-  height: 50px;
+  width: 132px;
+  height: 44px;
   align-self: flex-start;
 }
 
 .sky-preview--large {
+  display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 2 / 1;
 }
 
 .sky-preview-bg {
@@ -132,7 +134,11 @@
 
 .sky-preview-milkyway {
   fill: var(--violet);
-  opacity: 0.25;
+}
+
+.sky-preview-milkyway-core {
+  fill: var(--ink);
+  opacity: 0.5;
 }
 
 .spot-compare {

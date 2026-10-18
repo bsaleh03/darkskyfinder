@@ -130,7 +130,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
 
     if not skip_tiles:
         run_commands([lightpollution_pmtiles_command(tif, out_dir / f"lightpollution_{metro.key}.pmtiles"),
-                      *basemap_extract_commands(tiles_release or release, metro.bbox,
+                      *basemap_extract_commands(tiles_release or release, metro.tiles_bbox,
                                                 out_dir, metro.key)])
     return summary
 

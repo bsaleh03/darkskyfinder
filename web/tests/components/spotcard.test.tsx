@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { Spot } from '../../src/api/types'
 import { SpotCard } from '../../src/components/SpotCard'
-import { starCount } from '../../src/components/SkyPreview'
+import { SkyPreview, starCount } from '../../src/components/SkyPreview'
 import { directionsUrl } from '../../src/components/DirectionsButton'
 import { darknessLabel, DarknessScale } from '../../src/components/DarknessScale'
 import { NightScrubber } from '../../src/components/NightScrubber'
@@ -166,6 +166,25 @@ describe('helpers', () => {
       expect(n).toBeGreaterThanOrEqual(prev)
       prev = n
     }
+  })
+
+  it('sky preview: darker sky reveals more stars over the same field', () => {
+    const stars = (sqm: number) => {
+      const { container, unmount } = render(<SkyPreview sqm={sqm} label="sky" size="large" seed={42} />)
+      const pts = [...container.querySelectorAll('.sky-preview-star')].map((c) => `${c.getAttribute('cx')},${c.getAttribute('cy')}`)
+      const band = container.querySelector('.sky-preview-milkyway') !== null
+      const text = container.innerHTML
+      unmount()
+      return { pts, band, text }
+    }
+    const city = stars(18.3)
+    const dark = stars(21.8)
+    expect(dark.pts.length).toBeGreaterThan(city.pts.length * 4)
+    // Same seed: every star visible from the city is also visible from the dark site.
+    for (const p of city.pts) expect(dark.pts).toContain(p)
+    expect(city.band).toBe(false)
+    expect(dark.band).toBe(true)
+    expect(stars(Number.NaN).text).not.toMatch(/NaN/)
   })
 
   it('directions per platform', () => {

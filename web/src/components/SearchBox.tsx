@@ -3,7 +3,7 @@ import { useSearch } from '../api/queries'
 import type { SearchHit } from '../api/types'
 import './SearchBox.css'
 
-const METRO_NAMES: Record<string, string> = { se_mi: 'SE Michigan', bay_area: 'SF Bay Area' }
+const METRO_NAMES: Record<string, string> = { se_mi: 'Michigan', bay_area: 'SF Bay Area' }
 
 export function metroName(key: string): string {
   return METRO_NAMES[key] ?? key

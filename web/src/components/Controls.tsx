@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import type { AccessKey, SortKey } from '../api/types'
 import type { AppState } from '../state/useAppState'
 import './controls.css'
@@ -93,6 +93,10 @@ export function Controls({ state, metro, showVerified, onChange }: Props) {
     return () => el?.removeEventListener('change', onNativeChange)
   }, [])
   const shown = draft ?? state.drive
+  // Rarely used filters live behind a disclosure; the count keeps a non-default one from going unnoticed.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreId = useId()
+  const moreActive = state.border === 'exclude' ? 1 : 0
   const accessOptions: { value: AccessKey; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'likely', label: 'Likely open' },
@@ -127,15 +131,30 @@ export function Controls({ state, metro, showVerified, onChange }: Props) {
         onSelect={(access) => onChange({ access })}
       />
       {metro === 'se_mi' && (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={state.border === 'include'}
-          className="ctl-btn controls-switch"
-          onClick={() => onChange({ border: state.border === 'include' ? 'exclude' : 'include' })}
-        >
-          Include Canada
-        </button>
+        <>
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            aria-controls={moreId}
+            className="ctl-btn controls-more"
+            onClick={() => setMoreOpen((o) => !o)}
+          >
+            More filters{moreActive > 0 ? ` (${moreActive} on)` : ''}
+          </button>
+          {moreOpen && (
+            <div id={moreId} className="controls-more-panel">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={state.border === 'include'}
+                className="ctl-btn controls-switch"
+                onClick={() => onChange({ border: state.border === 'include' ? 'exclude' : 'include' })}
+              >
+                Include Canada
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
