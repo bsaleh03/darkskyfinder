@@ -75,6 +75,12 @@ describe('NightScrubber', () => {
     expect(wrap(container).className).not.toContain('scrubber-wrap--more')
   })
 
+  it('labels on-the-hour times compactly so they fit the column (the full time stays in the accessible name)', () => {
+    const { container, getByLabelText } = show([hour(21), hour(22), { ...hour(23), time: '2026-10-17T23:30:00-04:00' }])
+    expect([...container.querySelectorAll('.scrubber-time')].map((t) => t.textContent)).toEqual(['9 PM', '10 PM', '11:30 PM'])
+    expect(getByLabelText('10:00 PM, good, cloud 10%')).toBeTruthy()
+  })
+
   it('no fade when every hour fits', () => {
     const { container } = show()
     expect(wrap(container).className).not.toContain('scrubber-wrap--more')

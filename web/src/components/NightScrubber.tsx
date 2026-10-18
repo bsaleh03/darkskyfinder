@@ -88,8 +88,9 @@ export function NightScrubber({ timeline, bestWindow, timezone }: Props) {
                 <span className="scrubber-icon">{h.fog ? 'fog' : ''}</span>
                 <span className="scrubber-icon">{h.moon_up ? MOON : ''}</span>
               </span>
+              {/* "10 PM" rather than "10:00 PM", so the label fits the column; the full time is in the name. */}
               <span className="scrubber-time" aria-hidden="true">
-                {time}
+                {time.replace(/:00(?=\s)/, '')}
               </span>
             </li>
           )

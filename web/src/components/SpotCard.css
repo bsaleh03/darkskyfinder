@@ -178,9 +178,10 @@
   scrollbar-color: var(--glass-border) transparent;
 }
 
-/* More hours off-screen: the right edge fades out (alpha mask only, no colour of its own). */
+/* More hours off-screen: the right edge fades softly (alpha mask only, no colour of its own); not to nothing, so the
+   last whole column still reads as whole. */
 .scrubber-wrap--more .scrubber {
-  mask-image: linear-gradient(to left, transparent, currentcolor 28px);
+  mask-image: linear-gradient(to left, color-mix(in srgb, currentcolor 55%, transparent), currentcolor 32px);
 }
 
 .scrubber-hour {
@@ -230,7 +231,7 @@
   justify-items: center;
   width: 100%;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   line-height: 1rem;
 }
 
