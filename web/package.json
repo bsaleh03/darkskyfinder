@@ -8,12 +8,11 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "lint:css": "stylelint \"src/**/*.css\"",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "render-maps": "node scripts/render-maps.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.3",
-    "maplibre-gl": "^4.7.1",
-    "pmtiles": "^3.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -29,7 +28,10 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
     "jsdom": "^29.1.1",
+    "maplibre-gl": "^4.7.1",
     "pbf": "^3.3.0",
+    "pmtiles": "^3.2.1",
+    "sharp": "^0.35.5",
     "stylelint": "^16.26.1",
     "stylelint-config-standard": "^37.0.0",
     "typescript": "5.6",

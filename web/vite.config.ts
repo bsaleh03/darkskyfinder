@@ -29,6 +29,9 @@ export default defineConfig(({ command, mode }) => {
     build: {
       chunkSizeWarningLimit: 900, // the map-vendor chunk (~820 kB, ~225 kB gzip) is expected to be large
       rollupOptions: {
+        // Only the app is built. render/index.html (the map-picture render page used by scripts/render-maps.mjs)
+        // is served by the dev server only and never ships.
+        input: resolve(__dirname, 'index.html'),
         // MapLibre and PMTiles are most of the bundle and change rarely: their own chunk caches across app releases.
         output: { manualChunks: { 'map-vendor': ['maplibre-gl', 'pmtiles'] } },
       },
