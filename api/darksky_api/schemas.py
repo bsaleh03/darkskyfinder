@@ -121,6 +121,7 @@ class Spot(BaseModel):
     area: str | None
     country: str | None
     crosses_border: bool
+    crosses_state: bool
     recommended: bool
     sources: list[Source]
     category: str

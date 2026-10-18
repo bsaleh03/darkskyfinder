@@ -124,7 +124,7 @@ def test_start_sqm_nan_is_safe(tmp_path):
     from darksky_api.data import DataStore
     from darksky_api.config import MetroInfo
 
-    wide = MetroInfo("test", "Wide", (-85.5, 41.0, -83.0, 43.0), (-84.2, 41.9), 9, "America/Detroit", "X", "US")
+    wide = MetroInfo("test", "Wide", (-85.5, 41.0, -83.0, 43.0), (-84.2, 41.9), 9, "America/Detroit", "X", "US", "US-MI")
     build_data_dir(tmp_path)
     store = DataStore.load(tmp_path, {"test": wide})
     q = SpotsQuery(lat=42.9, lon=-85.4)  # inside bbox, outside the darkness grid
@@ -295,3 +295,50 @@ def test_border_exclude_also_drops_unavailable_cross_border(tmp_path):
     m = {**MINUTES, "sp_ca_closed": 20.0}
     assert "sp_ca_closed" in {s["id"] for s in run(st, routing=FakeRouting(m))["spots"]}
     assert "sp_ca_closed" not in {s["id"] for s in run(st, routing=FakeRouting(m), border="exclude")["spots"]}
+
+
+# --- cross-state flag ----------------------------------------------------------------
+
+@pytest.fixture()
+def state_store(tmp_path):
+    from darksky_api.data import DataStore
+    from fixtures import CA_SPOT, OH_SPOT
+
+    build_data_dir(tmp_path, spots=SPOTS + [CA_SPOT, OH_SPOT])
+    return DataStore.load(tmp_path, {"test": TEST_METRO})
+
+
+STATE_MINUTES = {**MINUTES, "sp_ca": 25.0, "sp_oh": 22.0}
+
+
+def test_crosses_state_rules(state_store):
+    from darksky_api.service import _crosses_state
+
+    metro = state_store.metros["test"]
+    assert _crosses_state({"region": "US-OH", "country": "US"}, metro) is True
+    assert _crosses_state({"region": "CA-ON", "country": "CA"}, metro) is False  # that is a country border
+    assert _crosses_state({"region": "US-MI", "country": "US"}, metro) is False
+
+
+def test_region_none_never_crosses(state_store):
+    from darksky_api.service import _crosses_state
+
+    metro = state_store.metros["test"]
+    assert _crosses_state({"region": None, "country": "US"}, metro) is False
+    assert _crosses_state({"country": "US"}, metro) is False
+
+
+def test_crosses_state_flag_in_results(state_store):
+    r = run(state_store, routing=FakeRouting(STATE_MINUTES))
+    flags = {s["id"]: s["crosses_state"] for s in r["spots"]}
+    assert flags["sp_oh"] is True
+    assert flags["sp_ca"] is False and flags["sp_hudson"] is False and flags["sp_closed"] is False
+
+
+def test_state_border_exclude_filters(state_store):
+    routing = FakeRouting(STATE_MINUTES)
+    r = run(state_store, routing=routing, state_border="exclude")
+    ids = {s["id"] for s in r["spots"]}
+    assert "sp_oh" not in ids and "sp_ca" in ids and "sp_hudson" in ids
+    assert "sp_oh" not in routing.calls[0][1]
+    assert "sp_oh" in {s["id"] for s in run(state_store, routing=FakeRouting(STATE_MINUTES))["spots"]}

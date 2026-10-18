@@ -12,7 +12,7 @@ from pyproj import Transformer
 from darksky_api.config import MetroInfo
 
 TEST_METRO = MetroInfo("test", "Test Metro", (-84.40, 41.75, -84.00, 42.05), (-84.20, 41.90), 9.0,
-                       "America/Detroit", "Testville", "US")
+                       "America/Detroit", "Testville", "US", "US-MI")
 CITY = (-84.05, 42.00)
 HUDSON = (-84.25, 41.83)
 EPSG = 32617
@@ -21,9 +21,9 @@ RES = 500.0
 
 def make_spot(id_, name, lon, lat, sqm, badge="check_hours", horizon="partial", penalty=0.0,
               unavailable=False, display_name=None, area=None,
-              country="US", recommended=False, sources=None):
+              country="US", recommended=False, sources=None, region="US-MI"):
     return {
-        "id": id_, "name": name, "display_name": display_name or name, "area": area, "country": country,
+        "id": id_, "name": name, "display_name": display_name or name, "area": area, "country": country, "region": region,
         "recommended": recommended, "sources": sources or [],
         "category": "park", "lon": lon, "lat": lat, "sqm": sqm, "bortle": 4,
         "sky_label": "Milky Way vivid" if sqm >= 21.3 else "Milky Way not visible",
@@ -47,7 +47,8 @@ SPOTS = [
 ]
 
 # Not part of SPOTS (keeps the base expectations stable); tests add it explicitly.
-CA_SPOT = make_spot("sp_ca", "Maple Provincial Park", -84.10, 41.95, 21.6, "verified", "open", 0.0, country="CA")
+CA_SPOT = make_spot("sp_ca", "Maple Provincial Park", -84.10, 41.95, 21.6, "verified", "open", 0.0, country="CA", region="CA-ON")
+OH_SPOT = make_spot("sp_oh", "Ohio Preserve", -84.12, 41.97, 21.6, "verified", "open", 0.0, region="US-OH")
 
 SEARCH_ROWS = [
     ("Testville", "locality", 42.00, -84.05),
@@ -81,7 +82,7 @@ def _write_search(path: Path) -> None:
     con.close()
 
 
-def build_data_dir(root: Path, spots=None, schema_version: int = 3) -> Path:
+def build_data_dir(root: Path, spots=None, schema_version: int = 4) -> Path:
     d = root / TEST_METRO.key
     d.mkdir(parents=True, exist_ok=True)
     doc = {"schema_version": schema_version, "metro": "test", "release": "2099-01-01.0",

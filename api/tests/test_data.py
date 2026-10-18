@@ -43,7 +43,13 @@ def test_wrong_schema_version_fails_fast(tmp_path):
 
 def test_old_schema_message_is_clear(tmp_path):
     build_data_dir(tmp_path, schema_version=2)
-    with pytest.raises(DataError, match=r"schema_version 2 != 3"):
+    with pytest.raises(DataError, match=r"schema_version 2 != 4"):
+        DataStore.load(tmp_path, {"test": TEST_METRO})
+
+
+def test_schema_3_rejected(tmp_path):
+    build_data_dir(tmp_path, schema_version=3)
+    with pytest.raises(DataError, match=r"schema_version 3 != 4"):
         DataStore.load(tmp_path, {"test": TEST_METRO})
 
 

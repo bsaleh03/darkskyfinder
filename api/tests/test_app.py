@@ -178,6 +178,15 @@ def test_border_param(client):
     assert client.get("/api/spots", params={**base, "border": "nope"}).status_code == 422
 
 
+def test_state_border_param(client):
+    base = {"lat": CITY[1], "lon": CITY[0]}
+    assert client.get("/api/spots", params=base).json()["spots"][0]["crosses_state"] is False
+    assert client.get("/api/spots", params={**base, "state_border": "exclude"}).status_code == 200
+    assert client.get("/api/spots", params={**base, "state_border": "nope"}).status_code == 422
+    comps = client.get("/openapi.json").json()["components"]["schemas"]
+    assert "crosses_state" in comps["Spot"]["properties"]
+
+
 def test_spot_pass_through_values_serialized(client, store):
     top = client.get("/api/spots", params={"lat": CITY[1], "lon": CITY[0]}).json()["spots"][0]
     src = next(s for s in store.metros["test"].spots if s["id"] == top["id"])

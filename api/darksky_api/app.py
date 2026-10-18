@@ -119,11 +119,12 @@ def create_app(store: DataStore, routing, forecast, settings: Settings,
               access: Literal["all", "likely", "verified"] = "all",
               sort: Literal["relevant", "closest", "best_view"] = "relevant",
               limit: int = Query(config.DEFAULT_LIMIT, ge=1, le=config.MAX_LIMIT),
-              border: Literal["include", "exclude"] = "include"):
+              border: Literal["include", "exclude"] = "include",
+              state_border: Literal["include", "exclude"] = "include"):
         if not limiter.allow(_client_ip(request, hops)):
             return _rate_limited()
         q = SpotsQuery(lat=lat, lon=lon, night=night, max_drive=max_drive, access=access, sort=sort, limit=limit,
-                       border=border)
+                       border=border, state_border=state_border)
         return find_spots(store, routing, forecast, q, today=today, now=now)
 
     return app
