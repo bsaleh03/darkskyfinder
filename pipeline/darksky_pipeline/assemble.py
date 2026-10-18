@@ -14,7 +14,7 @@ from .roads import ViewingPoint
 from .spots import Candidate
 from .util import atomic_path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def access_badge(category: str, curated: CuratedEntry | None) -> str:
