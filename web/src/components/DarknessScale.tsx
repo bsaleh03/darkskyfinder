@@ -18,45 +18,42 @@ function pct(sqm: number): number {
   return Math.min(100, Math.max(0, ((sqm - MIN) / (MAX - MIN)) * 100))
 }
 
+/** Labels near an end anchor inward so they never clip at the card edge. */
+function anchor(p: number): string {
+  if (p < 25) return ' darkness-marker-label--start'
+  if (p > 75) return ' darkness-marker-label--end'
+  return ''
+}
+
 interface Props {
   homeSqm: number | null
   spotSqm: number
   homeLabel?: string
 }
 
+// Just two labels, each saying where its point falls: the spot above the bar, home below it, so they never
+// collide. (A four-band legend crowded the bar on phones.)
 export function DarknessScale({ homeSqm, spotSqm, homeLabel = 'Home' }: Props) {
   const hasHome = homeSqm !== null && Number.isFinite(homeSqm)
   const spotText = `${hasHome ? 't' : 'T'}his spot: ${darknessLabel(spotSqm)}`
   const name = hasHome ? `${homeLabel}: ${darknessLabel(homeSqm)}; ${spotText}` : spotText
+  const spotPct = pct(spotSqm)
   return (
     <div className="darkness-scale">
       <div className="darkness-track" role="img" aria-label={name}>
         {hasHome && (
           <span className="darkness-marker darkness-marker--home" style={{ left: `${pct(homeSqm)}%` }}>
-            <span className="darkness-marker-label">{homeLabel}</span>
+            <span className={`darkness-marker-label darkness-marker-label--below${anchor(pct(homeSqm))}`} aria-hidden="true">
+              {`${homeLabel} · ${darknessLabel(homeSqm)}`}
+            </span>
           </span>
         )}
-        <span className="darkness-marker darkness-marker--spot" style={{ left: `${pct(spotSqm)}%` }}>
-          <span className="darkness-marker-label">Spot</span>
+        <span className="darkness-marker darkness-marker--spot" style={{ left: `${spotPct}%` }}>
+          <span className={`darkness-marker-label${anchor(spotPct)}`} aria-hidden="true">
+            {`This spot · ${darknessLabel(spotSqm)}`}
+          </span>
         </span>
       </div>
-      <ol className="darkness-labels" aria-hidden="true">
-        {/* Alternate rows: on narrow cards "Milky Way" (≈62% across) would otherwise run into the
-            right-aligned "Milky Way casts shadows" and read as "Milky Milky Way…". */}
-        {BANDS.map((b, i) => {
-          const end = i === BANDS.length - 1
-          const cls = ['darkness-label', end && 'darkness-label--end', i % 2 === 1 && 'darkness-label--lower']
-          return (
-            <li
-              key={b.label}
-              className={cls.filter(Boolean).join(' ')}
-              style={end ? undefined : { left: `${i === 0 ? 0 : pct(b.min)}%` }}
-            >
-              {b.label}
-            </li>
-          )
-        })}
-      </ol>
     </div>
   )
 }

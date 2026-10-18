@@ -213,7 +213,16 @@ describe('App flow', () => {
     expect(window.history.length).toBe(before + 1)
     expect(list().getByRole('button', { name: /Hidden Lake/ })).toHaveAttribute('aria-expanded', 'true')
     expect(within(mapEl()!).getByRole('button', { name: 'Hidden Lake' }).className).toContain('static-map-pin--selected')
-    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled())
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' })))
+  })
+
+  it('controls sit above the map', async () => {
+    go(START)
+    fetchSpots.mockResolvedValue(response())
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    const slider = screen.getByRole('slider')
+    expect(slider.compareDocumentPosition(mapEl()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('clicking a pin opens its card and leaves the full map', async () => {

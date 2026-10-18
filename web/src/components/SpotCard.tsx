@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type { Spot } from '../api/types'
 import { Amenities } from './Amenities'
 import { Badges } from './Badges'
@@ -21,6 +21,8 @@ interface Props {
 
 export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezone }: Props) {
   const panelId = useId()
+  const moreId = useId()
+  const [more, setMore] = useState(false)
   const seed = seedFrom(spot.id)
   const drive = `${spot.drive_is_estimate ? '≈' : ''}${Math.round(spot.drive_minutes)} min`
   return (
@@ -49,6 +51,8 @@ export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezon
       <div id={panelId} className="spot-body" hidden={!expanded}>
         {expanded && (
           <>
+            {/* Essentials first: where to go, then tonight's hours; the rest is one tap away. */}
+            <DirectionsButton lat={spot.lat} lon={spot.lon} entry={spot.entry} />
             <NightScrubber timeline={spot.timeline} bestWindow={spot.best_window} timezone={timezone} />
             <div className="spot-section">
               <div className="spot-compare">
@@ -66,18 +70,30 @@ export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezon
               {spot.darker_than_home && <p className="spot-darker">{spot.darker_than_home}</p>}
               <DarknessScale homeSqm={homeSqm} spotSqm={spot.sqm} homeLabel={homeLabel} />
             </div>
-            {spot.why.length > 0 && (
-              <ul className="why-chips">
-                {spot.why.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
+            <button
+              type="button"
+              className="spot-more"
+              aria-expanded={more}
+              aria-controls={moreId}
+              onClick={() => setMore((v) => !v)}
+            >
+              More about this spot
+            </button>
+            {more && (
+              <div id={moreId} className="spot-more-body">
+                {spot.why.length > 0 && (
+                  <ul className="why-chips">
+                    {spot.why.map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                )}
+                {spot.access.note && <p className="spot-note">{spot.access.note}</p>}
+                <SourcesList sources={spot.sources} />
+                <Amenities amenities={spot.amenities} />
+                <ExpertNumbers spot={spot} />
+              </div>
             )}
-            {spot.access.note && <p className="spot-note">{spot.access.note}</p>}
-            <SourcesList sources={spot.sources} />
-            <Amenities amenities={spot.amenities} />
-            <ExpertNumbers spot={spot} />
-            <DirectionsButton lat={spot.lat} lon={spot.lon} entry={spot.entry} />
           </>
         )}
       </div>

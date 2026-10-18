@@ -212,6 +212,10 @@ function Main() {
               timezone={data.timezone}
             />
           )}
+          {/* Drive time, sort and filters sit above the map so they're reachable without scrolling past it. */}
+          {error?.kind !== 'out_of_coverage' && (
+            <Controls state={state} metro={metro} showVerified={showVerified} onChange={(patch) => update(patch)} />
+          )}
         </div>
       ) : (
         <Welcome
@@ -251,9 +255,6 @@ function Main() {
       )}
       {start && (
         <main className={`app-list${busy ? ' app-list--stale' : ''}`} aria-busy={busy}>
-          {error?.kind !== 'out_of_coverage' && (
-            <Controls state={state} metro={metro} showVerified={showVerified} onChange={(patch) => update(patch)} />
-          )}
           {rateNotice && (
             <p className="app-notice" role="status">
               {RATE_LIMITED}
