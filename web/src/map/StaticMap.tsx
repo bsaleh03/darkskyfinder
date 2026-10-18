@@ -25,6 +25,13 @@ export const ATTRIBUTION =
   'Overture Maps Foundation · © OpenStreetMap contributors · TomTom · ESA WorldCover · VIIRS VNL (EOG / Colorado School of Mines)'
 const UNAVAILABLE = 'Map unavailable right now'
 
+/**
+ * Pins and the start are fitted into the view minus these insets (CSS px): the top clears the Full map and glow
+ * buttons (12 px + 44 px tall) plus half a selected pin; the bottom clears the attribution line (at least this
+ * much, more when it measures taller); the sides keep pins off the edge.
+ */
+export const SAFE_INSET = { top: 68, bottom: 34, side: 12 }
+
 type Size = { w: number; h: number }
 
 /** The framing never asks for more than the picture: what lies past its edges would only be water color. */
@@ -66,22 +73,42 @@ export function StaticMap(props: StaticMapProps) {
   const { manifest, labels, status } = useMapManifest(metro)
   const { ref, size } = useViewSize()
   const [brokenSrc, setBrokenSrc] = useState<string | null>(null)
+  // The attribution wraps on narrow views: keep pins above however tall it actually is.
+  const attribution = useRef<HTMLParagraphElement>(null)
+  const [attrH, setAttrH] = useState(0)
+  useEffect(() => {
+    const h = attribution.current?.offsetHeight ?? 0
+    setAttrH((prev) => (prev === h ? prev : h))
+  }, [size])
+
+  // The safe rect: the view minus the overlays. Pins, the start and labels are fitted into it.
+  const safe = useMemo(() => {
+    if (!size) return null
+    const top = SAFE_INSET.top
+    const bottom = Math.max(SAFE_INSET.bottom, attrH + 6)
+    const side = SAFE_INSET.side
+    const w = size.w - 2 * side
+    const h = size.h - top - bottom
+    // A view too small for the insets falls back to the whole view.
+    return w > 0 && h > 0 ? { left: side, top, w, h } : { left: 0, top: 0, w: size.w, h: size.h }
+  }, [size, attrH])
 
   const fit = useMemo(() => {
-    if (!manifest || !size || size.w <= 0 || size.h <= 0) return null
+    if (!manifest || !safe || safe.w <= 0 || safe.h <= 0) return null
     const points = spots.map((s) => ({ lon: s.lon, lat: s.lat }))
     const box = clampBox(frameView(points, start, driveMinutes, manifest.bounds))
-    return fitBox(box, size.w, size.h, manifest.aspect)
-  }, [manifest, size, spots, start, driveMinutes])
+    const f = fitBox(box, safe.w, safe.h, manifest.aspect)
+    return { ...f, left: f.left + safe.left, top: f.top + safe.top }
+  }, [manifest, safe, spots, start, driveMinutes])
 
   const placed = useMemo(() => {
-    if (!manifest || !fit || !size) return []
-    const toScreen = (p: LonLat) => {
+    if (!manifest || !fit || !safe) return []
+    const toSafe = (p: LonLat) => {
       const f = toFraction(p, manifest.bounds)
-      return { x: fit.left + f.x * fit.imgW, y: fit.top + f.y * fit.imgH }
+      return { x: fit.left + f.x * fit.imgW - safe.left, y: fit.top + f.y * fit.imgH - safe.top }
     }
-    return placeLabels(labels, toScreen, size.w, size.h)
-  }, [manifest, labels, fit, size])
+    return placeLabels(labels, toSafe, safe.w, safe.h)
+  }, [manifest, labels, fit, safe])
 
   const width = manifest && fit ? chooseWidth(manifest.widths, fit.imgW, window.devicePixelRatio || 1) : null
   const baseSrc = manifest && width ? mapFileUrl(manifest, red ? 'base_red' : 'base', width) : null
@@ -107,8 +134,17 @@ export function StaticMap(props: StaticMapProps) {
               className="static-map-image"
               style={{ width: fit.imgW, height: fit.imgH, transform: `translate(${fit.left}px, ${fit.top}px)` }}
             >
-              <img className="static-map-picture" src={baseSrc} alt="" draggable={false} onError={() => setBrokenSrc(baseSrc)} />
-              {glow && glowSrc && <img className="static-map-picture" src={glowSrc} alt="" draggable={false} />}
+              {/* Keyed by file: a new file (e.g. red mode) mounts a fresh image, so the previous picture never
+                  stays on screen while the new one downloads; the water color shows instead. */}
+              <img
+                key={baseSrc}
+                className="static-map-picture"
+                src={baseSrc}
+                alt=""
+                draggable={false}
+                onError={() => setBrokenSrc(baseSrc)}
+              />
+              {glow && glowSrc && <img key={glowSrc} className="static-map-picture" src={glowSrc} alt="" draggable={false} />}
               {placed.map(({ label }) => (
                 <span key={`${label.name}|${label.lon}|${label.lat}`} className="static-map-label" aria-hidden="true" style={at(label)}>
                   {label.name}
@@ -140,7 +176,9 @@ export function StaticMap(props: StaticMapProps) {
           <button type="button" className="static-map-glow-btn" aria-pressed={glow} onClick={onToggleGlow}>
             Light pollution glow
           </button>
-          <p className="static-map-attribution">{ATTRIBUTION}</p>
+          <p className="static-map-attribution" ref={attribution}>
+            {ATTRIBUTION}
+          </p>
         </>
       )}
     </div>

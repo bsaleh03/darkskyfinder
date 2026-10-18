@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Spot } from '../../src/api/types'
 import { toRed } from '../../src/map/color'
-import { StaticMap } from '../../src/map/StaticMap'
+import { SAFE_INSET, StaticMap } from '../../src/map/StaticMap'
 import type { useMapManifest as UseMapManifest } from '../../src/map/useMapManifest'
 import { restoreView, stubView } from '../viewStub'
 
@@ -82,6 +82,45 @@ describe('StaticMap', () => {
     const selected = screen.getByRole('button', { name: 'Lake Park Beach' })
     expect(selected.className).toContain('static-map-pin--selected')
     expect(selected.style.getPropertyValue('--pin')).toBe('#7FD6A0')
+  })
+
+  it('keeps every pin and the start clear of the buttons and the attribution on a phone view', () => {
+    stubView(375, 200)
+    // A wide spread of spots so the fit is limited by both axes in turn.
+    const spread = [
+      spot({ id: 'n', display_name: 'North', lon: -83.3, lat: 43.2 }),
+      spot({ id: 's', display_name: 'South', lon: -83.2, lat: 42.0 }),
+      spot({ id: 'w', display_name: 'West', lon: -84.4, lat: 42.6 }),
+      spot({ id: 'e', display_name: 'East', lon: -82.6, lat: 42.5 }),
+    ]
+    for (const spots of [spread, CORNERS, SPOTS]) {
+      const { container, unmount } = renderMap({ spots })
+      const layer = container.querySelector('.static-map-image') as HTMLElement
+      const [, tx, ty] = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(layer.style.transform)!.map(Number)
+      const w = parseFloat(layer.style.width)
+      const h = parseFloat(layer.style.height)
+      const marks = [...container.querySelectorAll<HTMLElement>('.static-map-pin, .static-map-start')]
+      expect(marks.length).toBe(spots.length + 1)
+      for (const m of marks) {
+        const x = tx + (parseFloat(m.style.left) / 100) * w
+        const y = ty + (parseFloat(m.style.top) / 100) * h
+        expect(x).toBeGreaterThanOrEqual(SAFE_INSET.side)
+        expect(x).toBeLessThanOrEqual(375 - SAFE_INSET.side)
+        expect(y).toBeGreaterThanOrEqual(SAFE_INSET.top)
+        expect(y).toBeLessThanOrEqual(200 - SAFE_INSET.bottom)
+      }
+      unmount()
+    }
+  })
+
+  it('switching to red mounts fresh images instead of keeping the normal picture on screen', () => {
+    stubView(400, 300)
+    const { container, props, rerender } = renderMap()
+    const [base, glowImg] = [...container.querySelectorAll('img')]
+    rerender(<StaticMap {...props} red />)
+    expect(base.isConnected).toBe(false)
+    expect(glowImg.isConnected).toBe(false)
+    for (const s of srcs(container)) expect(s).toContain('_red_')
   })
 
   it('start pin is labelled', () => {
