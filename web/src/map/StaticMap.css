@@ -56,12 +56,14 @@
   outline: 2px solid var(--amber);
 }
 
-/* A 32 px hit area around a small dot colored by sky quality (--pin, set per spot). */
+/* A 32 px hit area around a small dot colored by sky quality (--pin, set per spot). It has no text, but takes a
+   token color rather than the browser's white button text (red mode allows no white anywhere). */
 .static-map-pin {
   z-index: 2;
   width: 32px;
   height: 32px;
   padding: 0;
+  color: var(--ink);
   background: transparent;
   border: 0;
   border-radius: 50%;

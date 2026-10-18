@@ -59,8 +59,9 @@ async function shadowedElements(page: Page): Promise<string[]> {
 /**
  * Red (night-vision) mode must emit no white, blue or green light. Every visible, non-transparent
  * colour in the page chrome (text, background incl. gradients, borders, outlines, SVG fill/stroke)
- * must be red-dominant (green and blue at most half of red) or near-black. The map canvas is
- * excluded (WebGL pixels; its style is recoloured via toRed and the canvas is masked in screenshots).
+ * must be red-dominant (green and blue at most half of red) or near-black. The map pictures are
+ * excluded (image pixels; the render step checks every pixel of the red variants), but the pins,
+ * start marker, labels and map buttons drawn over them are checked here.
  */
 async function nonRedColors(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -85,7 +86,7 @@ async function nonRedColors(page: Page): Promise<string[]> {
       return el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) : true
     }
     for (const el of document.querySelectorAll('body *')) {
-      if (el.matches('.maplibregl-canvas') || !visible(el)) continue
+      if (el.matches('.static-map-picture') || !visible(el)) continue
       for (const pseudo of [null, '::before', '::after'] as const) {
         const cs = getComputedStyle(el, pseudo)
         if (pseudo && (cs.content === 'none' || cs.content === 'normal')) continue
@@ -104,12 +105,22 @@ async function nonRedColors(page: Page): Promise<string[]> {
   })
 }
 
+/** srcs of the map pictures (base first, then glow when shown). */
+const mapSrcs = (page: Page) =>
+  page.locator('.static-map-picture').evaluateAll((imgs) => imgs.map((img) => (img as HTMLImageElement).src))
+
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready)
   await expect(page.locator('main[aria-busy="true"]')).toHaveCount(0)
+  // Every map picture has finished decoding, so screenshots show the map, not the water color behind it.
+  await expect
+    .poll(() =>
+      page
+        .locator('.static-map-picture')
+        .evaluateAll((imgs) => imgs.length > 0 && imgs.every((i) => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0)),
+    )
+    .toBe(true)
 }
-
-const mapMask = (page: Page) => [page.locator('.maplibregl-canvas'), page.locator('.maplibregl-marker')]
 
 test('search, pick a start, explore nights, filters and red mode', async ({ page }, testInfo) => {
   const errors: string[] = []
@@ -117,9 +128,9 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
     if (msg.type() === 'error') errors.push(msg.text())
   })
   page.on('pageerror', (err) => errors.push(err.message))
-  const tiles: { url: string; status: number; at: number }[] = []
+  const tiles: { url: string; status: number }[] = []
   page.on('response', (res) => {
-    if (res.url().includes('/e2e-tiles/')) tiles.push({ url: res.url(), status: res.status(), at: Date.now() })
+    if (res.url().includes('/e2e-tiles/')) tiles.push({ url: res.url(), status: res.status() })
   })
 
   await page.clock.setFixedTime(CAPTURED_AT)
@@ -143,11 +154,29 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await expect(page.getByRole('button', { name: 'Royal Oak', exact: true })).toBeVisible() // start chip in the TopBar
   // Include Canada sits behind the collapsed More filters disclosure.
   await expect(page.getByRole('switch', { name: 'Include Canada' })).toHaveCount(0)
+
+  // The map is the pre-rendered se_mi picture (the fixture manifest lists only the 1/4 width, 874 px).
+  const map = page.locator('.static-map')
+  const base = map.locator('.static-map-picture').first()
+  await expect(base).toHaveAttribute('src', /\/e2e-tiles\/maps\/se_mi\/base_874\.webp$/)
+  await expect.poll(() => base.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await expect(map.getByRole('img', { name: 'Your start' })).toBeVisible()
+  await expect(map.getByText('Map unavailable right now')).toHaveCount(0)
   await settle(page)
   // No horizontal page scroll at either width (night chips scroll inside their own row).
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
   await page.screenshot({ path: testInfo.outputPath('main-normal-full.png'), fullPage: true })
-  await expect(page).toHaveScreenshot('main-normal.png', { mask: mapMask(page) })
+  await expect(page).toHaveScreenshot('main-normal.png')
+
+  // A pin selects its spot: the card expands and the URL records it. White Oak Twp Park sits alone west of
+  // the cluster, so its pin is never under another pin.
+  const pinned = 'White Oak Twp Park'
+  await map.getByRole('button', { name: pinned, exact: true }).click()
+  await expect(page).toHaveURL(/spot=/)
+  const pinnedCard = cards.filter({ hasText: pinned }).first()
+  await expect(pinnedCard.getByRole('button', { expanded: true })).toBeVisible()
+  await pinnedCard.getByRole('button', { expanded: true }).click()
+  await expect(pinnedCard.getByRole('button', { expanded: false })).toBeVisible()
 
   // Expand the first card: Directions points at Google Maps (non-iOS user agent).
   const head = cards.first().getByRole('button', { expanded: false })
@@ -177,7 +206,7 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await expect(page.getByText('Within 60 min')).toBeVisible()
   await expect(page).toHaveURL(/drive=60/)
 
-  // Red mode tints the page; the glow stays on, drawn from red-only tiles (URL setting untouched).
+  // Red mode tints the page; the glow stays on, drawn from the red pictures (URL setting untouched).
   const glowBtn = page.getByRole('button', { name: 'Light pollution glow' })
   await page.getByRole('switch', { name: 'Red mode' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-red', 'true')
@@ -185,13 +214,15 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await expect(glowBtn).toHaveAttribute('aria-pressed', 'true')
   await expect(page).not.toHaveURL(/glow=0/)
   await settle(page)
+  // Every map picture is a red variant (base_red + glow_red); the normal ones are gone.
+  await expect.poll(() => mapSrcs(page)).toEqual([expect.stringMatching(/\/base_red_874\.webp$/), expect.stringMatching(/\/glow_red_874\.webp$/)])
   expect(await nonRedColors(page)).toEqual([])
   // Colour emoji (the Canada flag) cannot take a token colour; red mode tints them with a CSS filter.
   const flag = page.locator('.emoji').first()
   await expect(flag).toBeVisible()
   expect(await flag.evaluate((el) => getComputedStyle(el).filter)).toMatch(/sepia/)
   await page.screenshot({ path: testInfo.outputPath('main-red-full.png'), fullPage: true })
-  await expect(page).toHaveScreenshot('main-red.png', { mask: mapMask(page) })
+  await expect(page).toHaveScreenshot('main-red.png')
 
   // Include Canada off refetches with border=exclude.
   const borderReq = page.waitForRequest(spotsRequest((q) => q.get('border') === 'exclude'))
@@ -207,34 +238,25 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
   expect(await shadowedElements(page)).toEqual([])
 
-  // Leaving red mode keeps the glow on, now from the normal-colour tiles.
+  // Leaving red mode keeps the glow on, now from the normal-colour pictures.
   await page.getByRole('switch', { name: 'Red mode' }).click()
   await expect(page.locator('html')).not.toHaveAttribute('data-red', 'true')
   await expect(glowBtn).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.emoji').first()).toHaveCSS('filter', 'none')
+  await expect.poll(() => mapSrcs(page)).toEqual([expect.stringMatching(/\/base_874\.webp$/), expect.stringMatching(/\/glow_874\.webp$/)])
 
-  // Selecting a card flies the map to it at z11, where the fixture basemap has tiles
-  // (see fixtures/tiles-region-se_mi.geojson), so the PMTiles archives are read with Range requests,
-  // including the light-pollution raster. The first expansion above
-  // already flew there; MapLibre keeps tiles across restyles, so this checks the whole session.
+  // Back in red mode with a card expanded, the card and the map chrome (pins, start, labels, buttons) stay red-only.
   await cards.first().getByRole('button', { expanded: false }).click()
   await expect(page).toHaveURL(/spot=/)
-  // The glow is one lower-48 raster under us/; basemaps stay per metro.
-  for (const file of ['se_mi/basemap_se_mi_base', 'se_mi/basemap_se_mi_transportation', 'se_mi/basemap_se_mi_divisions', 'us/lightpollution_us', 'us/basemap_us_divisions']) {
-    await expect
-      .poll(() => tiles.filter((t) => t.url.includes(`/${file}.pmtiles`) && t.status === 206).length)
-      .toBeGreaterThan(2) // header + directory + at least one tile
-  }
-  await page.waitForLoadState('networkidle')
-  expect(tiles.filter((t) => t.status !== 200 && t.status !== 206)).toEqual([])
-
-  // Back in red mode the expanded card and map chrome stay red-only, and the glow reads the red tiles.
   await page.getByRole('switch', { name: 'Red mode' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-red', 'true')
   await expect(glowBtn).toHaveAttribute('aria-pressed', 'true')
-  await expect
-    .poll(() => tiles.filter((t) => t.url.includes('/us/lightpollution_us_red.pmtiles') && t.status === 206).length)
-    .toBeGreaterThan(2)
+  await settle(page)
+  for (const src of await mapSrcs(page)) expect(src).toContain('_red_')
   expect(await nonRedColors(page)).toEqual([])
+
+  // Only the manifest, labels and pictures were fetched, all successfully.
+  await page.waitForLoadState('networkidle')
+  expect(tiles.filter((t) => t.status !== 200 && t.status !== 304)).toEqual([])
   expect(errors).toEqual([])
 })

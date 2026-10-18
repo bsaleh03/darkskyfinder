@@ -1,0 +1,20 @@
+{
+  "metro": "se_mi",
+  "bounds": [
+    -86.9,
+    41.65,
+    -82.4,
+    45.9
+  ],
+  "aspect": 1.3089244851258581,
+  "widths": [
+    874
+  ],
+  "files": {
+    "base": "base_{w}.webp",
+    "base_red": "base_red_{w}.webp",
+    "glow": "glow_{w}.webp",
+    "glow_red": "glow_red_{w}.webp"
+  },
+  "labels": "labels.json"
+}

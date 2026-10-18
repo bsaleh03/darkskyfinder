@@ -5,8 +5,9 @@
 //
 // Needs the pipeline outputs first: pipeline/out/<metro>/basemap_<metro>_*.pmtiles and
 // pipeline/out/maps/<metro>/{extent.json,glow.png,glow_red.png,labels.json,borders.geojson}.
-// Starts the Vite dev server (it serves ../pipeline/out at /tiles), renders the base picture with MapLibre in
-// headless Chromium at the region's full size in one canvas (normal and red), then writes every variant at
+// Starts the Vite dev server (it serves the PMTiles from ../pipeline/out at /tiles and the map inputs from
+// ../pipeline/out/maps at /render-data, since /tiles/maps is shadowed by the rendered output), renders the base
+// picture with MapLibre in headless Chromium at the region's full size in one canvas (normal and red), then writes every variant at
 // full, 1/2 and 1/4 width as WebP plus labels.json and manifest.json to pipeline/out/maps/<metro>/web/.
 // Red variants are checked pixel by pixel on the decoded files; any violation exits non-zero. Any MapLibre
 // source/tile error (missing PMTiles, failed borders.geojson) fails the run before anything is written for that region.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Upload the map files (and only those) to Cloudflare R2 via rclone: per-metro basemaps under <metro>/;
-# the lower-48 light-pollution overlay (normal + red-mode), land shapes and land-only borders under us/.
+# Upload the pre-rendered map pictures (and only those) to Cloudflare R2 via rclone:
+# pipeline/out/maps/<metro>/web/ -> r2:$R2_BUCKET/maps/<metro>/ (manifest.json, labels.json and
+# {base,base_red,glow,glow_red}_<width>.webp, every width the manifest lists). The bucket holds nothing else.
 # Usage: scripts/upload_tiles.sh [--dry-run]
 # Requires an rclone remote named "r2" (see README: `rclone config`, provider Cloudflare).
 # Credentials live in your rclone config; this script never reads or prints them.
@@ -15,44 +16,35 @@ for arg in "$@"; do
 done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="$ROOT/pipeline/out"
+MAPS="$ROOT/pipeline/out/maps"
 BUCKET="${R2_BUCKET:-darksky-tiles}"
 METROS=(se_mi bay_area)
-DIRS=("${METROS[@]}" us)
-TILE_RE='^(basemap_[a-z_]+_(base|transportation|buildings|divisions)|lightpollution_us(_red)?)\.pmtiles$'
-
-tiles_for() {
-  if [ "$1" = us ]; then echo "lightpollution_us.pmtiles lightpollution_us_red.pmtiles basemap_us_divisions.pmtiles"
-  else echo "basemap_$1_base.pmtiles basemap_$1_transportation.pmtiles basemap_$1_buildings.pmtiles basemap_$1_divisions.pmtiles"; fi
-}
+FILE_RE='^(manifest\.json|labels\.json|(base|base_red|glow|glow_red)_[0-9]+\.webp)$'
 
 command -v rclone >/dev/null || { echo "rclone not found on PATH" >&2; exit 1; }
 REMOTES="$(rclone listremotes)"
 grep -qx "r2:" <<<"$REMOTES" || {
   echo "rclone remote 'r2' not configured. Run 'rclone config' (S3 / Cloudflare) first." >&2; exit 1; }
 
-for m in "${DIRS[@]}"; do
-  dir="$OUT/$m"
-  [ -d "$dir" ] || { echo "missing $dir (run the pipeline first; us/ comes from darksky_pipeline.us_glow)" >&2; exit 1; }
-  files=()
-  # The per-metro lightpollution_<metro>.pmtiles are no longer shown on the map and stay local.
-  for f in $(tiles_for "$m"); do
-    [ -f "$dir/$f" ] || { echo "missing $dir/$f" >&2; exit 1; }
-    [[ "$f" =~ $TILE_RE ]] || { echo "refusing: unexpected file $f" >&2; exit 1; }
-    files+=("--include" "$f")
+for m in "${METROS[@]}"; do
+  dir="$MAPS/$m/web"
+  [ -f "$dir/manifest.json" ] || {
+    echo "missing $dir/manifest.json (run darksky_pipeline.static_maps, then 'npm run render-maps' in web/)" >&2; exit 1; }
+  # The manifest's widths decide which pictures must exist; nothing outside the allow-list can go up.
+  widths="$(tr -d '\r\n' <"$dir/manifest.json" | grep -o '"widths"[[:space:]]*:[[:space:]]*\[[^]]*\]' | grep -o '[0-9][0-9]*' || true)"
+  [ -n "$widths" ] || { echo "no widths in $dir/manifest.json" >&2; exit 1; }
+  files=(manifest.json labels.json)
+  for w in $widths; do
+    for k in base base_red glow glow_red; do files+=("${k}_${w}.webp"); done
   done
-  # Explicit includes plus a final catch-all exclude: nothing else (.npz/.tif/.sqlite/.json) can go up.
-  echo "== $m -> r2:$BUCKET/$m/"
-  rclone copy "$dir" "r2:$BUCKET/$m/" "${files[@]}" --exclude "*" \
-    --s3-upload-cutoff 100M --s3-chunk-size 64M --progress ${DRY[@]+"${DRY[@]}"}
+  includes=()
+  for f in "${files[@]}"; do
+    [ -f "$dir/$f" ] || { echo "missing $dir/$f" >&2; exit 1; }
+    [[ "$f" =~ $FILE_RE ]] || { echo "refusing: unexpected file $f" >&2; exit 1; }
+    includes+=("--include" "$f")
+  done
+  # Explicit includes plus a final catch-all exclude: nothing else in web/ can go up.
+  echo "== $m (${#files[@]} files) -> r2:$BUCKET/maps/$m/"
+  rclone copy "$dir" "r2:$BUCKET/maps/$m/" "${includes[@]}" --exclude "*" --progress ${DRY[@]+"${DRY[@]}"}
 done
-
-# borders.geojson (~1 MB) goes up gzipped with Content-Encoding, so browsers fetch ~1/4 of it and unpack it.
-borders="$OUT/us/borders.geojson"
-[ -f "$borders" ] || { echo "missing $borders" >&2; exit 1; }
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-gzip -9 -c "$borders" > "$tmp/borders.geojson"
-echo "== us/borders.geojson (gzip) -> r2:$BUCKET/us/"
-rclone copyto "$tmp/borders.geojson" "r2:$BUCKET/us/borders.geojson"   --header-upload "Content-Encoding: gzip" --header-upload "Content-Type: application/geo+json"   --progress ${DRY[@]+"${DRY[@]}"}
 echo "Done."

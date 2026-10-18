@@ -57,6 +57,8 @@ Query keys: `lat`, `lon` (start), `night` (YYYY-MM-DD; absent = API default "ton
 Full-screen Moonlit map of both metros, glass panel: headline "Where's the closest dark sky tonight?", search box, "Use my location", region chips (SE Michigan / SF Bay Area → fly to region; then tap map to set start). Location outside coverage → message "We cover SE Michigan and the SF Bay Area so far." + region chips.
 
 ### 5.2 Results (hybrid layout; mobile-first, desktop = left panel 400 px + map)
+> Superseded for the mini map: the live MapLibre map is replaced by pre-rendered regional pictures (no draggable start, no tap-to-start, no MetroSwitch); see `2026-10-18-static-map-design.md`.
+
 - **TopBar:** start chip (area/search label; tap → search), MetroSwitch, RedModeToggle.
 - **NightPicker:** 7 chips (Tonight, Sat 18, …) each with a go/maybe/no dot.
 - **VerdictCard:** sentence; best window; moon (illumination %, sets/rises); dark window; small notes for forecast unavailable / estimated drive times.
@@ -89,6 +91,8 @@ Keyboard-reachable controls; listbox/combobox semantics for search; `aria-expand
 ## 8. Hosting & deploy
 
 ### 8.1 Cloudflare R2 (tiles)
+> Superseded: R2 now holds only `maps/<metro>/` (manifest, labels and WebP pictures), no PMTiles; see `2026-10-18-static-map-design.md`.
+
 - Bucket `darksky-tiles`, public access via the r2.dev URL (custom domain optional later).
 - Objects: `se_mi/basemap_se_mi_{base,transportation,buildings,divisions}.pmtiles`, `se_mi/lightpollution_se_mi.pmtiles`, same for `bay_area/` (~2.3 GB total).
 - CORS: AllowedOrigins = site URL + `http://localhost:5173`; AllowedMethods `GET, HEAD`; AllowedHeaders `Range`, `If-Match`, `If-None-Match`; ExposeHeaders `ETag`, `Content-Length`, `Content-Range`, `Accept-Ranges`; MaxAge 86400.
