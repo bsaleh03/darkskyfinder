@@ -4,6 +4,7 @@ from datetime import date
 import httpx
 import pytest
 
+from darksky_api import config
 from darksky_api.cache import TTLCache
 from darksky_api.routing import RoutingClient, estimate_minutes, haversine_km
 
@@ -37,12 +38,13 @@ def ok(durations):
 def test_haversine_and_estimate():
     km = haversine_km(-84.05, 42.00, -84.25, 41.83)
     assert 24 < km < 27
-    assert estimate_minutes(60.0) == pytest.approx(81.0)
+    assert estimate_minutes(60.0) == pytest.approx(60 * 1.35 / 95 * 60)
+    assert estimate_minutes(50.0) == pytest.approx(42.63, abs=0.01)
 
 
 def test_ors_durations_to_minutes():
     minutes, est = make(ok([1800.0, 2400.0])).drive_minutes(START, DESTS)
-    assert est == set() and minutes == {"a": 30.0, "b": 40.0}
+    assert est == set() and minutes == {"a": 30.0 * config.ROUTE_TIME_FACTOR, "b": 40.0 * config.ROUTE_TIME_FACTOR}
 
 
 def test_null_duration_keeps_spot_with_estimate():
@@ -54,7 +56,7 @@ def test_null_duration_keeps_spot_with_estimate():
 
     c = make(handler)
     minutes, est = c.drive_minutes(START, DESTS)
-    assert est == {"b"} and minutes["a"] == 30.0
+    assert est == {"b"} and minutes["a"] == pytest.approx(24.0)
     assert minutes["b"] == pytest.approx(estimate_minutes(haversine_km(*START, -84.15, 41.78)))
     assert c.drive_minutes(START, DESTS) == (minutes, {"b"})  # unroutable result is cached too
     assert len(calls) == 1
@@ -107,7 +109,7 @@ def test_superset_pool_routes_only_new_ids():
     c.drive_minutes(START, DESTS)
     minutes, est = c.drive_minutes(START, DESTS + [("c", -84.30, 41.95)])
     assert seen[1] == [(-84.30, 41.95)]
-    assert minutes == {"a": 10.0, "b": 20.0, "c": 10.0} and est == set()
+    assert minutes == pytest.approx({"a": 8.0, "b": 16.0, "c": 8.0}) and est == set()
 
 
 def test_failure_backs_off_then_retries():
@@ -184,3 +186,26 @@ def test_failure_never_logs_api_key(caplog):
     assert est == {"a", "b"}
     assert all(key not in r.getMessage() for r in caplog.records)
     assert key not in caplog.text
+
+
+def test_factor_applies_to_ors_only():
+    assert config.ROUTE_TIME_FACTOR == 0.8
+    minutes, est = make(ok([1800.0, None])).drive_minutes(START, DESTS)
+    assert minutes["a"] == pytest.approx(24.0)
+    assert minutes["b"] == pytest.approx(estimate_minutes(haversine_km(*START, -84.15, 41.78)))  # unscaled
+    assert est == {"b"}
+
+
+def test_cache_key_uses_entry():
+    calls = []
+
+    def handler(req):
+        calls.append(json.loads(req.content)["locations"][1])
+        return httpx.Response(200, json={"durations": [[1800.0]]})
+
+    c = make(handler, cache=TTLCache(3600))
+    c.drive_minutes(START, [("a", -84.25, 41.83)])
+    c.drive_minutes(START, [("a", -84.25, 41.83)])
+    assert len(calls) == 1
+    c.drive_minutes(START, [("a", -84.26, 41.84)])  # same spot id, different routed point
+    assert calls == [[-84.25, 41.83], [-84.26, 41.84]]

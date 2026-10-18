@@ -72,16 +72,18 @@ class RoutingClient:
         known: dict[str, float | None] = {}
         todo: list[Dest] = []
         for d in unique:
-            hit = self._cache.get((sx, sy, d[0]))
+            hit = self._cache.get((sx, sy, d[0], round(d[1], 5), round(d[2], 5)))
             if hit is None:
                 todo.append(d)
             else:
                 known[d[0]] = hit[0]
         if todo and self._available():
             routed = self._route(start, todo)
+            by_id = {d[0]: d for d in todo}
             if routed is not None:
                 for i, value in routed.items():
-                    self._cache.set((sx, sy, i), (value,))
+                    _, dlon, dlat = by_id[i]
+                    self._cache.set((sx, sy, i, round(dlon, 5), round(dlat, 5)), (value,))
                 known.update(routed)
         minutes: dict[str, float] = {}
         estimated: set[str] = set()
@@ -117,4 +119,4 @@ def _parse_row(body: object, dests: list[Dest]) -> dict[str, float | None]:
     for sec in row:
         if sec is not None and (isinstance(sec, bool) or not isinstance(sec, (int, float))):
             raise TypeError("non-numeric duration")
-    return {i: None if sec is None else float(sec) / 60.0 for (i, _, _), sec in zip(dests, row)}
+    return {i: None if sec is None else float(sec) / 60.0 * config.ROUTE_TIME_FACTOR for (i, _, _), sec in zip(dests, row)}

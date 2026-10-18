@@ -55,7 +55,7 @@ def test_trusted_proxy_hops():
 def test_schema_and_home_country():
     from darksky_api.config import METROS, SCHEMA_VERSION
 
-    assert SCHEMA_VERSION == 4
+    assert SCHEMA_VERSION == 5
     assert all(m.home_country == "US" for m in METROS.values())
     assert METROS["se_mi"].home_region == "US-MI" and METROS["bay_area"].home_region == "US-CA"
 

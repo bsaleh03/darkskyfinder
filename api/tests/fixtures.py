@@ -21,11 +21,11 @@ RES = 500.0
 
 def make_spot(id_, name, lon, lat, sqm, badge="check_hours", horizon="partial", penalty=0.0,
               unavailable=False, display_name=None, area=None,
-              country="US", recommended=False, sources=None, region="US-MI"):
+              country="US", recommended=False, sources=None, region="US-MI", entry=None):
     return {
         "id": id_, "name": name, "display_name": display_name or name, "area": area, "country": country, "region": region,
         "recommended": recommended, "sources": sources or [],
-        "category": "park", "lon": lon, "lat": lat, "sqm": sqm, "bortle": 4,
+        "category": "park", "lon": lon, "lat": lat, "entry": entry, "sqm": sqm, "bortle": 4,
         "sky_label": "Milky Way vivid" if sqm >= 21.3 else "Milky Way not visible",
         "radiance": 0.2,
         "glare": {"buildings_1km": 0, "highway_m": None, "penalty": penalty},
@@ -82,7 +82,7 @@ def _write_search(path: Path) -> None:
     con.close()
 
 
-def build_data_dir(root: Path, spots=None, schema_version: int = 4) -> Path:
+def build_data_dir(root: Path, spots=None, schema_version: int = 5) -> Path:
     d = root / TEST_METRO.key
     d.mkdir(parents=True, exist_ok=True)
     doc = {"schema_version": schema_version, "metro": "test", "release": "2099-01-01.0",

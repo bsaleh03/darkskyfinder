@@ -28,7 +28,7 @@ METROS: dict[str, MetroInfo] = {
                           "America/Los_Angeles", "San Francisco", "US", "US-CA"),
 }
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 NIGHT_DAYS_AHEAD = 6
 
 # Spots query
@@ -48,7 +48,11 @@ ROUTE_CACHE_ROUND = 2  # decimal places of start lon/lat (~1 km)
 ROUTE_CACHE_MAX = 50_000  # (start, spot) pairs
 ROUTE_FAILURE_BACKOFF_S = 60
 FALLBACK_ROAD_FACTOR = 1.35
-FALLBACK_SPEED_KMH = 60.0
+FALLBACK_SPEED_KMH = 95.0  # Google's samples average ~70 km/h straight-line; x1.35 road factor
+# ORS runs slower than Google Maps. Calibration samples (Google min / ORS min, same endpoints):
+# Ortonville 39/52, Crosswinds Marsh 39/57, Ann Arbor 53/60, Detroit 20/22, SF->Livermore 50/56
+# (ratios 0.68-0.91). Applied to ORS durations only, never to fallback estimates.
+ROUTE_TIME_FACTOR = 0.8
 
 # Forecast (Open-Meteo)
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"

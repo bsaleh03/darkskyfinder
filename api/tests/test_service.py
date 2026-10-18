@@ -342,3 +342,34 @@ def test_state_border_exclude_filters(state_store):
     assert "sp_oh" not in ids and "sp_ca" in ids and "sp_hudson" in ids
     assert "sp_oh" not in routing.calls[0][1]
     assert "sp_oh" in {s["id"] for s in run(state_store, routing=FakeRouting(STATE_MINUTES))["spots"]}
+
+
+ENTRY = {"lon": -84.251, "lat": 41.831}
+
+
+def _entry_store(tmp_path):
+    from darksky_api.data import DataStore
+
+    spots = [dict(x) for x in SPOTS]
+    spots[0]["entry"] = ENTRY
+    return DataStore.load(build_data_dir(tmp_path, spots=spots), {"test": TEST_METRO})
+
+
+def test_routes_to_entry_when_present(tmp_path):
+    routing = FakeRouting(MINUTES)
+    run(_entry_store(tmp_path), routing=routing)
+    dests = {i: (lon, lat) for i, lon, lat in routing.dests[0]}
+    assert dests["sp_hudson"] == (ENTRY["lon"], ENTRY["lat"])
+
+
+def test_routes_to_spot_point_without_entry(tmp_path):
+    routing = FakeRouting(MINUTES)
+    run(_entry_store(tmp_path), routing=routing)
+    dests = {i: (lon, lat) for i, lon, lat in routing.dests[0]}
+    assert dests["sp_camp"] == (-84.15, 41.78)
+
+
+def test_response_includes_entry(tmp_path):
+    r = run(_entry_store(tmp_path))
+    by_id = {s["id"]: s for s in r["spots"]}
+    assert by_id["sp_hudson"]["entry"] == ENTRY and by_id["sp_camp"]["entry"] is None
