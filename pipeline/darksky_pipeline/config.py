@@ -132,17 +132,17 @@ VERIFIED_MIN_GAIN_MAG = 1.0
 OVERTURE_TILES_URL = "https://overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com/tiles/{release}/{theme}.pmtiles"
 OVERTURE_TILE_THEMES = ("base", "transportation", "buildings", "divisions")
 LIGHTPOLLUTION_BRIGHT_SQM = 17.0  # SQM rendered at full brightness in the overlay
-# The map's glow overlay covers the lower 48 (display only; spot darkness still uses the per-metro grids).
-US_GLOW_BBOX: BBox = (-126.0, 23.5, -65.5, 50.5)
-US_GLOW_EPSG = 5070  # NAD83 / Conus Albers (equal-area)
-US_GLOW_RES_M = 1_000  # sky glow is smooth; 1 km keeps the CONUS grid ~15M cells
-US_GLOW_ZOOMS = (3, 9)
-# Overture divisions (land shapes, country/state borders, state names) for the map beyond the metros.
-US_BORDERS_BBOX: BBox = (-130.0, 18.0, -60.0, 62.0)
-US_BORDERS_MAXZOOM = 7
-US_BORDER_COUNTRIES = frozenset({"US", "CA", "MX"})
-US_BORDER_SIMPLIFY_DEG = 0.001  # ~100 m: fine to ~z11, keeps borders.geojson under ~1 MB
-US_BORDER_LAND_SLACK_DEG = 0.003  # land shapes grown ~300 m before cutting, so land borders stay continuous
+# Static map inputs (pre-rendered per-region pictures; extent = METROS[key].tiles_bbox).
+STATIC_MAP_MAX_PIXELS = 16_000_000  # decoded size cap per image (mobile Safari)
+STATIC_MAP_GLOW_RES_M = 500  # darkness grid resolution for the glow picture; sky glow is smooth
+STATIC_MAP_LABEL_LIMIT = 400  # most important localities kept per region
+# Overture divisions: country/state borders cut to land.
+BORDER_COUNTRIES = frozenset({"US", "CA", "MX"})
+BORDER_SIMPLIFY_DEG = 0.001  # ~100 m
+BORDER_LAND_SLACK_DEG = 0.003  # land shapes grown ~300 m before cutting, so land borders stay continuous
+# Region areas include their share of the Great Lakes, so lakes/rivers crossed by a border are cut out too;
+# smaller water (ponds) is ignored so state lines are not broken by tiny gaps.
+BORDER_WATER_MIN_KM2 = 1.0
 
 # --- Search -------------------------------------------------------------------
 # Street addresses are excluded so each metro's index stays small enough to ship

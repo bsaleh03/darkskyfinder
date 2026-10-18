@@ -1,17 +1,13 @@
-"""Basemap PMTiles extraction (Overture) and light-pollution overlay raster."""
+"""Basemap PMTiles extraction (Overture) and the light-pollution color ramps."""
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
 
 import numpy as np
-import rasterio
-from rasterio.crs import CRS
-from rasterio.transform import from_origin
 
 from . import config
 from .config import BBox
-from .darkness import DarknessGrid
 
 # t (0 = natural sky, 1 = city) -> RGBA. Indigo/violet/amber palette from the spec.
 _COLOR_STOPS = np.array([
@@ -53,19 +49,6 @@ def sqm_to_rgba(sqm: np.ndarray, stops: np.ndarray | None = None) -> np.ndarray:
     for ch in range(4):
         out[..., ch] = np.round(np.interp(t, stops[:, 0], stops[:, ch + 1])).astype(np.uint8)
     return out
-
-
-def write_lightpollution_tif(grid: DarknessGrid, path: Path, stops: np.ndarray | None = None) -> None:
-    rgba = sqm_to_rgba(grid.sqm, stops)
-    h, w = grid.sqm.shape
-    with rasterio.open(path, "w", driver="GTiff", height=h, width=w, count=4, dtype="uint8",
-                       crs=CRS.from_epsg(grid.epsg), transform=from_origin(grid.x0, grid.y0, grid.res, grid.res),
-                       photometric="RGB", alpha="YES") as dst:
-        dst.write(np.moveaxis(rgba, -1, 0))
-
-
-def lightpollution_pmtiles_command(tif: Path, out: Path, minzoom: int = 6, maxzoom: int = 11) -> list[str]:
-    return ["rio", "pmtiles", str(tif), str(out), "--format", "PNG", "--zoom-levels", f"{minzoom}..{maxzoom}", "--rgba"]
 
 
 def run_commands(cmds: list[list[str]]) -> None:

@@ -1,10 +1,6 @@
-from pathlib import Path
-
 import numpy as np
-import rasterio
 
-from darksky_pipeline.tiles import (RED_STOPS, basemap_extract_commands, lightpollution_pmtiles_command, sqm_to_rgba,
-                                    write_lightpollution_tif)
+from darksky_pipeline.tiles import RED_STOPS, basemap_extract_commands, sqm_to_rgba
 
 
 def test_basemap_commands(tmp_path):
@@ -44,18 +40,3 @@ def test_red_ramp_is_red_only_and_matches_normal_alpha():
     assert (red[:, 0] >= 100).all()  # never darkens the map (see test_sqm_to_rgba_never_darkens_the_map)
     assert (red[:, 3] == normal[:, 3]).all()  # same visibility, only the hue changes
 
-
-def test_write_lightpollution_tif(darkness_grid, tmp_path, caplog):
-    path = tmp_path / "lp.tif"
-    write_lightpollution_tif(darkness_grid, path)
-    with rasterio.open(path) as src:
-        assert src.count == 4 and src.dtypes[0] == "uint8"
-        assert src.crs.to_epsg() == darkness_grid.epsg
-        assert (src.height, src.width) == darkness_grid.sqm.shape
-        assert src.colorinterp[3].name == "alpha"
-    assert not [r for r in caplog.records if "GDAL signalled an error" in r.getMessage()]
-
-
-def test_lightpollution_command():
-    cmd = lightpollution_pmtiles_command(Path("a.tif"), Path("b.pmtiles"))
-    assert cmd == ["rio", "pmtiles", "a.tif", "b.pmtiles", "--format", "PNG", "--zoom-levels", "6..11", "--rgba"]

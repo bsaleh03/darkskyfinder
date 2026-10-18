@@ -28,7 +28,7 @@ def built(overture_root, viirs_path, tmp_path_factory):
 
 def test_outputs_exist(built):
     _, _, out = built
-    for name in ("spots_test.json", "darkness_test.npz", "search_test.sqlite", "lightpollution_test.tif"):
+    for name in ("spots_test.json", "darkness_test.npz", "search_test.sqlite"):
         assert (out / name).exists(), name
 
 
@@ -92,8 +92,8 @@ def _run(overture_root, viirs_path, out, **kw):
 
 def test_missing_tile_tools_fail_before_any_work(overture_root, viirs_path, tmp_path, monkeypatch):
     from darksky_pipeline import build
-    monkeypatch.setattr(build.shutil, "which", lambda name: None if name == "rio" else f"/bin/{name}")
-    with pytest.raises(RuntimeError, match="rio"):
+    monkeypatch.setattr(build.shutil, "which", lambda name: None if name == "pmtiles" else f"/bin/{name}")
+    with pytest.raises(RuntimeError, match="pmtiles"):
         _run(overture_root, viirs_path, tmp_path / "out", skip_tiles=False)
     assert not (tmp_path / "out" / "darkness_test.npz").exists()
     assert not (tmp_path / "out" / "spots_test.json").exists()

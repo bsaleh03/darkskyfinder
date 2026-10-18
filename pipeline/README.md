@@ -6,12 +6,11 @@ Turns a pinned Overture release + a VIIRS night-lights GeoTIFF into per-metro da
 
 ```bash
 python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev,tiles]"   # macOS/Linux: .venv/bin/python
+.venv/Scripts/python -m pip install -e ".[dev]"   # macOS/Linux: .venv/bin/python
 ```
 
 Also install the `pmtiles` CLI (https://github.com/protomaps/go-pmtiles/releases) and put it on PATH.
-A build without `--skip-tiles` checks for both `pmtiles` and `rio` (rio-pmtiles, from the `tiles` extra)
-before doing any work and stops with an error if either is missing.
+A build without `--skip-tiles` checks for `pmtiles` before doing any work and stops with an error if it is missing.
 
 ## Inputs
 
@@ -29,7 +28,7 @@ python -m darksky_pipeline.build --metro bay_area --release <R> --viirs data/vii
 ```
 
 Outputs land in `out/<metro>/`: `spots_<metro>.json`, `darkness_<metro>.npz`, `search_<metro>.sqlite`,
-`lightpollution_<metro>.pmtiles`, `basemap_<metro>_<theme>.pmtiles`.
+`basemap_<metro>_<theme>.pmtiles`.
 Use `--skip-tiles` for fast iterations and `--no-strict` to see failing checks without aborting.
 Sanity checks run before the tile step, so a failing strict build stops before the slow tile extraction.
 

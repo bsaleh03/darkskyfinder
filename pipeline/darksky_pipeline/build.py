@@ -25,12 +25,11 @@ from .geo import Projector
 from .roads import build_road_network, find_viewing_point, parking_points
 from .search_index import build_search_index, search_rows
 from .spots import build_candidates
-from .tiles import (basemap_extract_commands, lightpollution_pmtiles_command, run_commands,
-                    write_lightpollution_tif)
+from .tiles import basemap_extract_commands, run_commands
 
 log = logging.getLogger("darksky_pipeline")
 
-TILE_TOOLS = ("pmtiles", "rio")
+TILE_TOOLS = ("pmtiles",)
 
 
 def check_tile_tools() -> None:
@@ -38,7 +37,7 @@ def check_tile_tools() -> None:
     missing = [t for t in TILE_TOOLS if shutil.which(t) is None]
     if missing:
         raise RuntimeError(f"tile tools not found on PATH: {', '.join(missing)} "
-                           "(install go-pmtiles and `pip install -e .[tiles]` for rio-pmtiles, or use --skip-tiles)")
+                           "(install go-pmtiles, or use --skip-tiles)")
 
 
 @dataclass
@@ -114,9 +113,6 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     build_search_index(rows, out_dir / f"search_{metro.key}.sqlite")
     log.info("search index: %d rows", len(rows))
 
-    tif = out_dir / f"lightpollution_{metro.key}.tif"
-    write_lightpollution_tif(grid, tif)
-
     results = run_checks(doc, grid, metro, projector, count_range or config.SPOT_COUNT_RANGE[metro.key])
     for r in results:
         log.info("check %-26s %s  %s", r.name, "OK  " if r.ok else "FAIL", r.detail)
@@ -129,9 +125,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
         assert_checks(results)  # before the slow tile step
 
     if not skip_tiles:
-        run_commands([lightpollution_pmtiles_command(tif, out_dir / f"lightpollution_{metro.key}.pmtiles"),
-                      *basemap_extract_commands(tiles_release or release, metro.tiles_bbox,
-                                                out_dir, metro.key)])
+        run_commands(basemap_extract_commands(tiles_release or release, metro.tiles_bbox, out_dir, metro.key))
     return summary
 
 
