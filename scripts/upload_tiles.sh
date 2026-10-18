@@ -37,14 +37,20 @@ for m in "${METROS[@]}"; do
   for w in $widths; do
     for k in base base_red glow glow_red; do files+=("${k}_${w}.webp"); done
   done
-  includes=()
+  json=()
+  webp=()
   for f in "${files[@]}"; do
     [ -f "$dir/$f" ] || { echo "missing $dir/$f" >&2; exit 1; }
     [[ "$f" =~ $FILE_RE ]] || { echo "refusing: unexpected file $f" >&2; exit 1; }
-    includes+=("--include" "$f")
+    case "$f" in
+      *.json) json+=("--include" "$f") ;;
+      *) webp+=("--include" "$f") ;;
+    esac
   done
-  # Explicit includes plus a final catch-all exclude: nothing else in web/ can go up.
+  # Explicit includes plus a final catch-all exclude: nothing else in web/ can go up. The manifest and labels
+  # may change on a re-render, so browsers recheck them after 5 minutes; the pictures keep for a day.
   echo "== $m (${#files[@]} files) -> r2:$BUCKET/maps/$m/"
-  rclone copy "$dir" "r2:$BUCKET/maps/$m/" "${includes[@]}" --exclude "*" --progress ${DRY[@]+"${DRY[@]}"}
+  rclone copy "$dir" "r2:$BUCKET/maps/$m/" "${json[@]}" --exclude "*"     --header-upload "Cache-Control: public, max-age=300" --progress ${DRY[@]+"${DRY[@]}"}
+  rclone copy "$dir" "r2:$BUCKET/maps/$m/" "${webp[@]}" --exclude "*"     --header-upload "Cache-Control: public, max-age=86400" --progress ${DRY[@]+"${DRY[@]}"}
 done
 echo "Done."

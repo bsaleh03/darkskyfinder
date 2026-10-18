@@ -57,7 +57,7 @@ Pipeline (needs the `pmtiles` CLI and a VNL GeoTIFF; see `pipeline/README.md`):
 ```bash
 cd pipeline
 python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev,tiles]"     # macOS/Linux: .venv/bin/python
+.venv/Scripts/python -m pip install -e ".[dev]"     # macOS/Linux: .venv/bin/python
 python -m darksky_pipeline.build --metro se_mi --release <R> --viirs data/viirs/vnl_annual.tif
 python -m darksky_pipeline.build --metro bay_area --release <R> --viirs data/viirs/vnl_annual.tif
 # map picture inputs (extent, glow, labels, borders) per region, into out/maps/<metro>/
