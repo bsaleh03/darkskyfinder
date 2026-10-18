@@ -2,8 +2,8 @@
 # Upload the pre-rendered map pictures (and only those) to Cloudflare R2 via rclone:
 # pipeline/out/maps/<metro>/web/ -> r2:$R2_BUCKET/maps/<metro>/. The manifest decides every file name:
 # manifest.json, labels.json, {base,base_red,glow,glow_red}_<width>.webp for every level-0 width it lists, and
-# {base,base_red,glow,glow_red}_L<l>_<c>_<r>.webp for every tile of every level >= 1 (2 + 4x3 + 4x4 = 30 files
-# per region with two levels). The bucket holds nothing else.
+# {base,base_red}_L<l>_<c>_<r>.webp for every tile of every level >= 1 (the glow is level 0 only; 2 + 4x3 + 2x4 =
+# 22 files per region with two levels, 44 for both). The bucket holds nothing else.
 # Usage: scripts/upload_tiles.sh [--dry-run]
 # Requires an rclone remote named "r2" (see README: `rclone config`, provider Cloudflare).
 # Credentials live in your rclone config; this script never reads or prints them.
@@ -23,7 +23,8 @@ MAPS="${MAPS_DIR:-$ROOT/pipeline/out/maps}"
 BUCKET="${R2_BUCKET:-darksky-tiles}"
 METROS=(se_mi bay_area)
 KINDS=(base base_red glow glow_red)
-FILE_RE='^(manifest\.json|labels\.json|(base|base_red|glow|glow_red)_([0-9]+|L[1-9][0-9]*_[0-9]+_[0-9]+)\.webp)$'
+TILE_KINDS=(base base_red)
+FILE_RE='^(manifest\.json|labels\.json|(base|base_red|glow|glow_red)_[0-9]+\.webp|(base|base_red)_L[1-9][0-9]*_[0-9]+_[0-9]+\.webp)$'
 
 command -v rclone >/dev/null || { echo "rclone not found on PATH" >&2; exit 1; }
 REMOTES="$(rclone listremotes)"
@@ -43,13 +44,13 @@ for m in "${METROS[@]}"; do
   for w in $widths; do
     for k in "${KINDS[@]}"; do files+=("${k}_${w}.webp"); done
   done
-  # Levels >= 1: every tile of the level's cols x rows grid, named by the manifest's tile templates.
+  # Levels >= 1: every base and base_red tile of the level's cols x rows grid, named by the manifest's tile templates.
   levels="$(grep -o '{"level":[0-9]*,"cols":[0-9]*,"rows":[0-9]*}' <<<"$manifest" | tr -dc '0-9,\n' || true)"
   [ -n "$levels" ] || { echo "no levels in $dir/manifest.json (render-maps writes manifest v2)" >&2; exit 1; }
   tiles="$(grep -oE '"tiles":[{]("[a-z_]+":"[^"]*",?)*[}]' <<<"$manifest" || true)"
   while IFS=, read -r level cols rows; do
     [ "$level" -ge 1 ] || continue
-    for k in "${KINDS[@]}"; do
+    for k in "${TILE_KINDS[@]}"; do
       tpl="$(grep -o "\"$k\":\"[^\"]*\"" <<<"$tiles" | sed 's/^"[^"]*":"//; s/"$//' || true)"
       [ -n "$tpl" ] || { echo "no tiles.$k in $dir/manifest.json" >&2; exit 1; }
       for ((c = 0; c < cols; c++)); do

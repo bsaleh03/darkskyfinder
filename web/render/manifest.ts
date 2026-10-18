@@ -4,6 +4,9 @@ import { sizesFor } from './sizes'
 
 export type FileKey = 'base' | 'base_red' | 'glow' | 'glow_red'
 export const KEYS: FileKey[] = ['base', 'base_red', 'glow', 'glow_red']
+/** Kinds that have tiles at levels >= 1. The glow stays at level 0: its VIIRS source is coarser than that. */
+export type TileKey = 'base' | 'base_red'
+export const TILE_KEYS: TileKey[] = ['base', 'base_red']
 
 /** Level-0 picture names; {w} = one of `widths`. */
 export const FILES: Record<FileKey, string> = {
@@ -13,11 +16,9 @@ export const FILES: Record<FileKey, string> = {
   glow_red: 'glow_red_{w}.webp',
 }
 /** Tile names for levels >= 1; {l} = level, {c} = column from the west, {r} = row from the north. */
-export const TILES: Record<FileKey, string> = {
+export const TILES: Record<TileKey, string> = {
   base: 'base_L{l}_{c}_{r}.webp',
   base_red: 'base_red_L{l}_{c}_{r}.webp',
-  glow: 'glow_L{l}_{c}_{r}.webp',
-  glow_red: 'glow_red_L{l}_{c}_{r}.webp',
 }
 
 export type Level = { level: number; cols: number; rows: number }
@@ -26,7 +27,7 @@ export type Level = { level: number; cols: number; rows: number }
  * Manifest v2. v1 fields: bounds = W,S,E,N of the images (Web Mercator rectangle), aspect = height / width,
  * widths ascending (level-0 sizes), files = level-0 name templates. v2 adds `levels` (level l = 2^l x 2^l tiles,
  * each tile the level-0 full size, so level l is widths.at(-1) * 2^l wide in all) and `tiles` (tile name
- * templates; level 0 is served by `files`, never as a tile).
+ * templates for base and base_red only; level 0 is served by `files`, never as a tile, and the glow is level 0 only).
  */
 export type MapManifestV2 = {
   metro: string
@@ -36,7 +37,7 @@ export type MapManifestV2 = {
   files: Record<FileKey, string>
   labels: string
   levels: Level[]
-  tiles: Record<FileKey, string>
+  tiles: Record<TileKey, string>
 }
 
 export type Extent = { bounds: Bounds; width: number; height: number; levels: number[] }
@@ -61,13 +62,13 @@ export function buildManifest(metro: string, extent: Extent): MapManifestV2 {
   }
 }
 
-/** Every file the region serves (and the upload sends): manifest, labels, level-0 widths and level >= 1 tiles. */
+/** Every file the region serves (and the upload sends): manifest, labels, level-0 widths and level >= 1 base tiles. */
 export function manifestFiles(m: MapManifestV2): string[] {
   const out = ['manifest.json', m.labels]
   for (const w of m.widths) for (const k of KEYS) out.push(m.files[k].replace('{w}', String(w)))
   for (const { level, cols, rows } of m.levels) {
     if (level === 0) continue
-    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) for (const k of KEYS) out.push(tileFile(m.tiles[k], level, c, r))
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) for (const k of TILE_KEYS) out.push(tileFile(m.tiles[k], level, c, r))
   }
   return out
 }

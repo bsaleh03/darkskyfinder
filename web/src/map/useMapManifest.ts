@@ -5,6 +5,8 @@ import type { MapLabel } from './labels'
 import type { Bounds } from './projection'
 
 export type MapFileKey = 'base' | 'base_red' | 'glow' | 'glow_red'
+/** Kinds with tiles at levels >= 1 (the glow is level 0 only). */
+export type MapTileKey = 'base' | 'base_red'
 
 /** The pipeline's per-region picture manifest (pipeline/out/maps/<metro>/web/manifest.json). */
 export type MapManifest = {
@@ -18,8 +20,9 @@ export type MapManifest = {
   labels: string
   /** v2: the levels (level 0 is the whole picture at `widths`; level l >= 1 is a grid of full-width tiles) */
   levels?: MapLevel[]
-  /** v2: tile file name templates relative to the manifest, with {l}, {c} and {r} for level, column and row */
-  tiles?: Record<MapFileKey, string>
+  /** v2: base and base_red tile file name templates relative to the manifest, with {l}, {c} and {r} for level,
+   * column and row (any glow templates are ignored) */
+  tiles?: Record<MapTileKey, string>
 }
 
 const LEVEL_0: MapLevel = { level: 0, cols: 1, rows: 1 }
@@ -42,7 +45,7 @@ export function mapFileUrl(manifest: MapManifest, key: MapFileKey, width: number
 }
 
 /** Absolute URL of one tile of a level >= 1, resolved against the manifest's URL. */
-export function mapTileUrl(manifest: MapManifest, key: MapFileKey, level: number, col: number, row: number): string {
+export function mapTileUrl(manifest: MapManifest, key: MapTileKey, level: number, col: number, row: number): string {
   const base = new URL(manifestUrl(manifest.metro), window.location.href)
   const name = manifest.tiles![key].replace('{l}', String(level)).replace('{c}', String(col)).replace('{r}', String(row))
   return new URL(name, base).href
@@ -57,19 +60,22 @@ async function getJson(url: string, signal: AbortSignal): Promise<unknown> {
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
 const KEYS = ['base', 'base_red', 'glow', 'glow_red'] as const
+const TILE_KEYS = ['base', 'base_red'] as const
 const isCount = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0
-const isTemplates = (v: unknown): v is Record<MapFileKey, string> =>
-  typeof v === 'object' && v !== null && KEYS.every((k) => typeof (v as Record<string, unknown>)[k] === 'string')
+const hasTemplates = (v: unknown, keys: readonly string[]) =>
+  typeof v === 'object' && v !== null && keys.every((k) => typeof (v as Record<string, unknown>)[k] === 'string')
+const isTemplates = (v: unknown): v is Record<MapFileKey, string> => hasTemplates(v, KEYS)
+const isTileTemplates = (v: unknown): v is Record<MapTileKey, string> => hasTemplates(v, TILE_KEYS)
 
-/** v2 additions: absent (v1, level 0 only), or levels with whole positive grids, and tile templates for level >= 1. */
+/** v2 additions: absent (v1, level 0 only), or levels with whole positive grids, and base tile templates for level >= 1. */
 function levelsOk(m: Partial<MapManifest>): boolean {
-  if (m.levels === undefined) return m.tiles === undefined || isTemplates(m.tiles)
+  if (m.levels === undefined) return m.tiles === undefined || isTileTemplates(m.tiles)
   if (!Array.isArray(m.levels) || m.levels.length === 0) return false
   const ok = m.levels.every(
     (l) => l !== null && typeof l === 'object' && Number.isInteger(l.level) && l.level >= 0 && isCount(l.cols) && isCount(l.rows),
   )
   if (!ok || !m.levels.some((l) => l.level === 0)) return false
-  return m.levels.every((l) => l.level === 0) || isTemplates(m.tiles)
+  return m.levels.every((l) => l.level === 0) || isTileTemplates(m.tiles)
 }
 
 /** Validate the manifest of `metro` (v1, or v2 with levels and tiles). */

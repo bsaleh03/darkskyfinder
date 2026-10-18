@@ -20,7 +20,7 @@ describe('buildManifest (v2)', () => {
     expect(m.labels).toBe('labels.json')
   })
 
-  it('adds the levels (2^l x 2^l grid each) and the tile name templates', () => {
+  it('adds the levels (2^l x 2^l grid each) and the tile name templates (base and base_red only: the glow stays at level 0)', () => {
     expect(m.levels).toEqual([
       { level: 0, cols: 1, rows: 1 },
       { level: 1, cols: 2, rows: 2 },
@@ -28,8 +28,6 @@ describe('buildManifest (v2)', () => {
     expect(m.tiles).toEqual({
       base: 'base_L{l}_{c}_{r}.webp',
       base_red: 'base_red_L{l}_{c}_{r}.webp',
-      glow: 'glow_L{l}_{c}_{r}.webp',
-      glow_red: 'glow_red_L{l}_{c}_{r}.webp',
     })
   })
 
@@ -45,16 +43,17 @@ describe('tileFile', () => {
 })
 
 describe('manifestFiles', () => {
-  it('lists manifest, labels, the level-0 widths and the level >= 1 tiles of all four kinds (30 per region)', () => {
+  it('lists manifest, labels, the level-0 widths of all four kinds and the level >= 1 base tiles (22 per region)', () => {
     const files = manifestFiles(buildManifest('se_mi', extent))
-    expect(files).toHaveLength(2 + 4 * 3 + 4 * 4)
+    expect(files).toHaveLength(2 + 4 * 3 + 2 * 4)
     expect(new Set(files).size).toBe(files.length)
     expect(files).toContain('manifest.json')
     expect(files).toContain('labels.json')
     expect(files).toContain('base_874.webp')
     expect(files).toContain('glow_red_3496.webp')
     expect(files).toContain('base_L1_1_1.webp')
-    expect(files).toContain('glow_red_L1_0_1.webp')
+    expect(files).toContain('base_red_L1_0_1.webp')
+    expect(files.some((f) => f.startsWith('glow') && f.includes('_L1_'))).toBe(false)
     expect(files.some((f) => f.includes('_L0_'))).toBe(false)
   })
 })

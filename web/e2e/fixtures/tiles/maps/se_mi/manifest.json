@@ -31,8 +31,6 @@
   ],
   "tiles": {
     "base": "base_L{l}_{c}_{r}.webp",
-    "base_red": "base_red_L{l}_{c}_{r}.webp",
-    "glow": "glow_L{l}_{c}_{r}.webp",
-    "glow_red": "glow_red_L{l}_{c}_{r}.webp"
+    "base_red": "base_red_L{l}_{c}_{r}.webp"
   }
 }

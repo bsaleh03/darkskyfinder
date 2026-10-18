@@ -18,8 +18,6 @@ const V2 = {
   tiles: {
     base: 'base_L{l}_{c}_{r}.webp',
     base_red: 'base_red_L{l}_{c}_{r}.webp',
-    glow: 'glow_L{l}_{c}_{r}.webp',
-    glow_red: 'glow_red_L{l}_{c}_{r}.webp',
   },
 }
 
@@ -28,6 +26,13 @@ describe('parseManifest', () => {
     const m = parseManifest(V2, 'se_mi')
     expect(mapLevels(m)).toEqual(V2.levels)
     expect(m.tiles).toEqual(V2.tiles)
+  })
+
+  it('needs only base and base_red tile templates above level 0; glow templates are optional and ignored', () => {
+    const withGlow = { ...V2, tiles: { ...V2.tiles, glow: 'glow_L{l}_{c}_{r}.webp', glow_red: 'glow_red_L{l}_{c}_{r}.webp' } }
+    expect(mapLevels(parseManifest(withGlow, 'se_mi'))).toEqual(V2.levels)
+    expect(() => parseManifest({ ...V2, tiles: { base: V2.tiles.base } }, 'se_mi')).toThrow()
+    expect(() => parseManifest({ ...V2, tiles: { ...V2.tiles, glow: 7 } }, 'se_mi')).not.toThrow()
   })
 
   it('old manifest works at level 0: a v1 manifest (no levels, no tiles) is level 0 only', () => {
