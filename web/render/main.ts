@@ -8,6 +8,7 @@ declare global {
   interface Window {
     __renderDone?: boolean
     __renderError?: string
+    __renderErrors?: string[]
     __renderInfo?: { zoom: number; nw: [number, number]; se: [number, number]; canvas: [number, number] }
   }
 }
@@ -41,7 +42,16 @@ async function main() {
     fadeDuration: 0,
   })
   map.fitBounds(bounds, { padding: 0, animate: false })
-  map.on('error', (e) => console.error('map error', e.error?.message ?? e))
+  // Every source/tile error is recorded live: the script fails the render on the first one (see render/errors.ts).
+  // A source whose archive is missing never loads, so `idle` may never come; the script must not wait for it.
+  const errors: string[] = []
+  window.__renderErrors = errors
+  map.on('error', (e) => {
+    const src = (e as { sourceId?: string }).sourceId
+    const msg = `${src ? `${src}: ` : ''}${e.error?.message ?? String(e.error ?? 'unknown error')}`
+    errors.push(msg)
+    console.error('map error', msg)
+  })
   map.once('idle', () => {
     const [west, south, east, north] = bounds
     const nw = map.project([west, north])

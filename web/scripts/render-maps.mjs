@@ -1,14 +1,15 @@
 // Dev-only: render the per-region map pictures the app shows instead of a live map.
 //
 //   npm run render-maps                      # both regions
-//   npm run render-maps -- --metro se_mi     # one region (repeatable)
+//   npm run render-maps -- --metro se_mi     # one region (repeatable; any key with pipeline/out/maps/<key>/)
 //
 // Needs the pipeline outputs first: pipeline/out/<metro>/basemap_<metro>_*.pmtiles and
 // pipeline/out/maps/<metro>/{extent.json,glow.png,glow_red.png,labels.json,borders.geojson}.
 // Starts the Vite dev server (it serves ../pipeline/out at /tiles), renders the base picture with MapLibre in
 // headless Chromium at the region's full size in one canvas (normal and red), then writes every variant at
 // full, 1/2 and 1/4 width as WebP plus labels.json and manifest.json to pipeline/out/maps/<metro>/web/.
-// Red variants are checked pixel by pixel on the decoded files; any violation exits non-zero.
+// Red variants are checked pixel by pixel on the decoded files; any violation exits non-zero. Any MapLibre
+// source/tile error (missing PMTiles, failed borders.geojson) fails the run before anything is written for that region.
 import { chromium } from '@playwright/test'
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
@@ -21,7 +22,7 @@ const WEB = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const MAPS = resolve(WEB, '../pipeline/out/maps')
 const METROS = ['se_mi', 'bay_area']
 const MAX_PIXELS = 16_000_000
-const RENDER_TIMEOUT_MS = 20 * 60_000
+const RENDER_TIMEOUT_MS = 5 * 60_000
 const FILES = { base: 'base_{w}.webp', base_red: 'base_red_{w}.webp', glow: 'glow_{w}.webp', glow_red: 'glow_red_{w}.webp' }
 
 function parseArgs(argv) {
@@ -30,7 +31,7 @@ function parseArgs(argv) {
     if (argv[i] === '--metro' && argv[i + 1]) metros.push(argv[++i])
     else throw new Error(`unknown argument ${argv[i]} (usage: render-maps [--metro <key>]...)`)
   }
-  for (const m of metros) if (!METROS.includes(m)) throw new Error(`unknown metro ${m} (known: ${METROS.join(', ')})`)
+  for (const m of metros) if (!/^[a-z_]+$/.test(m)) throw new Error(`bad metro key ${m}`)
   return metros.length ? [...new Set(metros)] : METROS
 }
 
@@ -49,7 +50,7 @@ const kb = (n) => `${(n / 1024).toFixed(0)} KB`
 const mb = (n) => `${(n / 1024 / 1024).toFixed(2)} MB`
 
 /** Render one base picture (PNG buffer) through the dev-only render page. */
-async function renderBase(browser, origin, metro, red, w, h) {
+async function renderBase(browser, origin, metro, red, w, h, mods) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })
   page.on('console', (msg) => {
     if (msg.type() === 'error' || msg.type() === 'warning') console.log(`  [page ${msg.type()}] ${msg.text()}`)
@@ -58,12 +59,14 @@ async function renderBase(browser, origin, metro, red, w, h) {
   try {
     const t0 = Date.now()
     await page.goto(`${origin}/render/index.html?metro=${metro}&red=${red ? 1 : 0}&w=${w}&h=${h}`)
-    await page.waitForFunction(() => window.__renderDone || window.__renderError, null, {
+    await page.waitForFunction(() => window.__renderDone || window.__renderError || window.__renderErrors?.length, null, {
       timeout: RENDER_TIMEOUT_MS,
       polling: 1000,
     })
     const err = await page.evaluate(() => window.__renderError)
     if (err) throw new Error(`render page: ${err}`)
+    const failure = mods.errors.renderFailure(await page.evaluate(() => window.__renderErrors ?? []))
+    if (failure) throw new Error(`${metro} base${red ? '_red' : ''}: ${failure}`)
     const info = await page.evaluate(() => window.__renderInfo)
     const off = Math.max(Math.abs(info.nw[0]), Math.abs(info.nw[1]), Math.abs(info.se[0] - w), Math.abs(info.se[1] - h))
     console.log(
@@ -131,12 +134,12 @@ async function renderMetro(browser, origin, metro, mods) {
     if (m.width !== W || m.height !== H) throw new Error(`${g} is ${m.width}x${m.height}, expected ${W}x${H}`)
   }
 
+  const sizes = mods.sizes.sizesFor(W, H / W)
+  // Both renders must succeed before anything is written for this region.
+  const base = await renderBase(browser, origin, metro, false, W, H, mods)
+  const baseRed = await renderBase(browser, origin, metro, true, W, H, mods)
   const outDir = join(dir, 'web')
   await mkdir(outDir, { recursive: true })
-  const sizes = mods.sizes.sizesFor(W, H / W)
-
-  const base = await renderBase(browser, origin, metro, false, W, H)
-  const baseRed = await renderBase(browser, origin, metro, true, W, H)
   // Full-size render sources, kept next to the glow inputs for inspection (not uploaded).
   await writeFile(join(dir, 'base.png'), base)
   await writeFile(join(dir, 'base_red.png'), baseRed)
@@ -207,6 +210,7 @@ async function main() {
     const mods = {
       sizes: await server.ssrLoadModule('/render/sizes.ts'),
       redcheck: await server.ssrLoadModule('/render/redcheck.ts'),
+      errors: await server.ssrLoadModule('/render/errors.ts'),
     }
     browser = await chromium.launch()
     for (const metro of metros) {
