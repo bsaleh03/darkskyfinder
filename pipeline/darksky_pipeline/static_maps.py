@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import time
 import warnings
 from pathlib import Path
@@ -94,13 +95,41 @@ def labels_query(release: str, bbox: BBox, source_root: str = config.OVERTURE_S3
     )
 
 
+# Overture lists Michigan's townships as localities ("Canton Charter", "Redford Township") next to the towns they
+# surround: show them without the suffix, and keep only the more important of two same-named places this close.
+_TOWNSHIP_SUFFIX = re.compile(r"\s+(?:Charter\s+Township|Charter\s+Twp|Charter|Township|Twp)\.?$", re.IGNORECASE)
+LABEL_SAME_NAME_KM = 5.0
+
+
+def _display_name(name: str) -> str:
+    stripped = _TOWNSHIP_SUFFIX.sub("", name).strip()
+    return stripped or name
+
+
+def _km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    x = math.radians(lon2 - lon1) * math.cos(math.radians((lat1 + lat2) / 2))
+    return 6371.0 * math.hypot(x, math.radians(lat2 - lat1))
+
+
 def labels_json(df: pd.DataFrame, limit: int = config.STATIC_MAP_LABEL_LIMIT) -> list[dict]:
-    """Localities by importance (population, then prominence; unknowns last), rank 1 = most important."""
+    """Localities by importance (population, then prominence; unknowns last), rank 1 = most important.
+
+    Township suffixes are stripped for display; of two places with the same display name within
+    LABEL_SAME_NAME_KM only the more important one is kept; then duplicates on (name, rounded position) go.
+    """
     df = df[df["name"].notna() & (df["name"].astype(str).str.strip() != "")].copy()
+    df["name"] = df["name"].astype(str).str.strip().map(_display_name)
     df["lon"], df["lat"] = df["lon"].astype(float).round(5), df["lat"].astype(float).round(5)
-    df = df.drop_duplicates(subset=["name", "lon", "lat"])
     df = df.sort_values(["population", "prominence", "name"], ascending=[False, False, True],
-                        na_position="last", kind="stable").head(limit)
+                        na_position="last", kind="stable")
+    kept: dict[str, list[tuple[float, float]]] = {}
+    keep = []
+    for r in df.itertuples(index=False):
+        near = any(_km(r.lon, r.lat, lon, lat) <= LABEL_SAME_NAME_KM for lon, lat in kept.get(r.name, []))
+        keep.append(not near)
+        if not near:
+            kept.setdefault(r.name, []).append((r.lon, r.lat))
+    df = df[keep].drop_duplicates(subset=["name", "lon", "lat"]).head(limit)
     return [{"name": str(r.name), "lon": float(r.lon), "lat": float(r.lat), "rank": i}
             for i, r in enumerate(df.itertuples(index=False), start=1)]
 

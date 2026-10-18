@@ -192,3 +192,24 @@ def test_land_borders_geojson_skips_point_only_touches():
     lines = pd.DataFrame({"subtype": ["region"], "wkb": [shapely.to_wkb(shapely.LineString([(1, 1), (2, 1.5)]))]})
     fc = land_borders_geojson(lines, areas, bbox=(-10, -10, 10, 10), slack_deg=0.0, simplify_deg=0.0)
     assert fc["features"] == []
+
+
+def test_labels_json_strips_township_suffixes_and_drops_nearby_duplicates():
+    from darksky_pipeline.static_maps import labels_json
+    df = pd.DataFrame({
+        "name": ["Canton", "Canton Charter", "Shelby Charter", "Redford Township", "Redford", "Milford Twp",
+                 "Milford", "Lyon Charter", "Lyon Charter"],
+        # Canton Charter is ~2 km from Canton; Redford Township ~3 km from Redford; Milford Twp ~30 km from Milford.
+        "lon": [-83.48, -83.50, -82.95, -83.30, -83.29, -83.60, -83.60, -83.65, -83.65],
+        "lat": [42.31, 42.30, 42.67, 42.40, 42.38, 42.30, 42.59, 42.47, 42.47],
+        "population": [90_000, 98_000, 80_000, 48_000, None, 10_000, 6_000, 20_000, 20_000],
+        "prominence": [50, 50, 40, 30, 30, 10, 10, 10, 10],
+    })
+    out = labels_json(df)
+    names = [x["name"] for x in out]
+    # Suffixes are stripped for display; the higher-ranked of two same-named places within 5 km is kept.
+    assert names == ["Canton", "Shelby", "Redford", "Lyon", "Milford", "Milford"]
+    assert out[0]["lon"] == -83.50  # the Charter township outranked the town, so its position stays
+    assert out[2] == {"name": "Redford", "lon": -83.30, "lat": 42.40, "rank": 3}
+    assert [x["rank"] for x in out] == [1, 2, 3, 4, 5, 6]
+    assert not any(n.endswith((" Charter", " Township", " Twp")) for n in names)
