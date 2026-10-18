@@ -13,8 +13,8 @@
   "files": {
     "base": "base_{w}.webp",
     "base_red": "base_red_{w}.webp",
-    "glow": "glow_{w}.webp",
-    "glow_red": "glow_red_{w}.webp"
+    "base_glow": "base_glow_{w}.webp",
+    "base_glow_red": "base_glow_red_{w}.webp"
   },
   "labels": "labels.json",
   "levels": [
@@ -31,6 +31,8 @@
   ],
   "tiles": {
     "base": "base_L{l}_{c}_{r}.webp",
-    "base_red": "base_red_L{l}_{c}_{r}.webp"
+    "base_red": "base_red_L{l}_{c}_{r}.webp",
+    "base_glow": "base_glow_L{l}_{c}_{r}.webp",
+    "base_glow_red": "base_glow_red_L{l}_{c}_{r}.webp"
   }
 }
