@@ -173,8 +173,10 @@ def land_borders_geojson(lines: pd.DataFrame, areas: pd.DataFrame, bbox: BBox, w
     features = []
 
     def add(geom, subtype: str, water: bool) -> None:
-        geom = shapely.line_merge(shapely.multilinestrings(
-            [p for p in shapely.get_parts(shapely.get_parts(geom)) if p.geom_type == "LineString"]))  # drop touch points
+        parts = [p for p in shapely.get_parts(shapely.get_parts(geom)) if p.geom_type == "LineString"]
+        if not parts:  # touches only at points
+            return
+        geom = shapely.line_merge(shapely.multilinestrings(parts))  # drop touch points
         if simplify_deg:
             geom = geom.simplify(simplify_deg)
         geom = shapely.set_precision(geom, 10 ** -decimals)

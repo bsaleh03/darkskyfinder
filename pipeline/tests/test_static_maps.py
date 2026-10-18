@@ -183,3 +183,12 @@ def test_cli_parses(key, monkeypatch):
     monkeypatch.setattr(static_maps, "build_static_map_inputs", lambda *a, **k: seen.append(a) or a[3] / a[0])
     static_maps.main(["--metro", key, "--viirs", "v.tif", "--tiles-release", "2026-09-23.1", "--out", "out/maps"])
     assert seen[0][0] == key and seen[0][2] == "2026-09-23.1"
+
+
+def test_land_borders_geojson_skips_point_only_touches():
+    # A line that touches the land only at a corner intersects to a Point: no feature, no error.
+    from darksky_pipeline.static_maps import land_borders_geojson
+    areas = pd.DataFrame({"wkb": [shapely.to_wkb(shapely.box(0, 0, 1, 1))]})
+    lines = pd.DataFrame({"subtype": ["region"], "wkb": [shapely.to_wkb(shapely.LineString([(1, 1), (2, 1.5)]))]})
+    fc = land_borders_geojson(lines, areas, bbox=(-10, -10, 10, 10), slack_deg=0.0, simplify_deg=0.0)
+    assert fc["features"] == []
