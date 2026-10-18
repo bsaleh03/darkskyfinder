@@ -7,7 +7,7 @@ export const config = {
 
 /**
  * Covered metros, mirrored from api/darksky_api/config.py METROS (in the API's /api/regions order),
- * so the map style, initial bounds and region chips never wait on a cold API. /api/regions may override.
+ * so initial regions never wait on a cold API. /api/regions may override.
  */
 export const METROS: Region[] = [
   {
@@ -27,12 +27,3 @@ export const METROS: Region[] = [
     timezone: 'America/Detroit',
   },
 ]
-
-/**
- * Area each metro's detailed basemap extract covers (pipeline config Metro.tiles_bbox); defaults to the
- * spot bbox. Michigan's map covers the whole Lower Peninsula while spots stay in the southeast.
- */
-export const METRO_MAP_BOUNDS: Record<string, [number, number, number, number]> = {
-  bay_area: [-123.2, 36.4, -121.0, 38.6],
-  se_mi: [-86.9, 41.65, -82.4, 45.9],
-}

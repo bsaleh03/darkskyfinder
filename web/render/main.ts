@@ -22,7 +22,8 @@ async function main() {
   if (!/^[a-z_]+$/.test(metro) || !(w > 0) || !(h > 0)) throw new Error('need ?metro=<key>&red=0|1&w=<W>&h=<H>')
 
   const tilesUrl = `${location.origin}/tiles`
-  const res = await fetch(`${tilesUrl}/maps/${metro}/extent.json`)
+  const dataUrl = `${location.origin}/render-data`
+  const res = await fetch(`${dataUrl}/${metro}/extent.json`)
   if (!res.ok) throw new Error(`extent.json: HTTP ${res.status}`)
   const { bounds } = (await res.json()) as { bounds: [number, number, number, number] }
 
@@ -33,7 +34,7 @@ async function main() {
   maplibregl.addProtocol('pmtiles', new Protocol().tile as AddProtocolAction)
   const map = new maplibregl.Map({
     container: el,
-    style: renderStyle({ tilesUrl, metro, red, bordersUrl: `${tilesUrl}/maps/${metro}/borders.geojson` }),
+    style: renderStyle({ tilesUrl, metro, red, bordersUrl: `${dataUrl}/${metro}/borders.geojson` }),
     interactive: false,
     attributionControl: false,
     preserveDrawingBuffer: true,

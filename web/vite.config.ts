@@ -4,7 +4,6 @@ import { resolve } from 'node:path'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { checkBuildEnv } from './buildenv'
 import { devtilesMiddleware } from './devtiles'
-import { glyphFallback } from './glyphfallback'
 
 // Serves local files with Range support: real pipeline output at /tiles (map pictures at /tiles/maps), e2e fixtures at /e2e-tiles.
 const devTiles = (mounts: Record<string, string> = { '/tiles': '../pipeline/out' }): Plugin => {
@@ -29,18 +28,19 @@ export default defineConfig(({ command, mode }) => {
         '/tiles/maps/se_mi': '../pipeline/out/maps/se_mi/web',
         '/tiles/maps/bay_area': '../pipeline/out/maps/bay_area/web',
         '/tiles': '../pipeline/out',
+        // Unshadowed pipeline map inputs (extent.json, borders.geojson) for the dev-only render page.
+        '/render-data': '../pipeline/out/maps',
         '/e2e-tiles': 'e2e/fixtures/tiles',
       }),
-      glyphFallback(resolve(__dirname, 'public/glyphs')),
     ],
+    // The dev-only render page (render/index.html) is the only importer of these now; pre-bundle them up front so the
+    // dev server does not discover and re-optimize them mid-render.
+    optimizeDeps: { include: ['maplibre-gl', 'pmtiles'] },
     build: {
-      chunkSizeWarningLimit: 900, // the map-vendor chunk (~820 kB, ~225 kB gzip) is expected to be large
       rollupOptions: {
         // Only the app is built. render/index.html (the map-picture render page used by scripts/render-maps.mjs)
         // is served by the dev server only and never ships.
         input: resolve(__dirname, 'index.html'),
-        // MapLibre and PMTiles are most of the bundle and change rarely: their own chunk caches across app releases.
-        output: { manualChunks: { 'map-vendor': ['maplibre-gl', 'pmtiles'] } },
       },
     },
     test: {

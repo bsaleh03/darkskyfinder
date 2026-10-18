@@ -16,20 +16,3 @@ export function pinColor(spot: Spot): string {
   const key = (spot.sky_label ?? '').replace(/^Milky Way /i, '').toLowerCase()
   return BY_LABEL[key] ?? BY_LABEL['not visible']
 }
-
-export function spotsToGeoJSON(spots: Spot[], selectedId: string | null): GeoJSON.FeatureCollection {
-  return {
-    type: 'FeatureCollection',
-    features: spots.map((s) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-      properties: {
-        id: s.id,
-        color: pinColor(s),
-        selected: s.id === selectedId,
-        darkSky: s.dark_sky_place,
-        unavailable: s.unavailable,
-      },
-    })),
-  }
-}
