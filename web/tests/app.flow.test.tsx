@@ -24,7 +24,11 @@ vi.mock('../src/map/useMapManifest', async (orig) => ({
 }))
 
 const mapEl = () => document.querySelector<HTMLElement>('.app-map')
-const mapImages = () => [...(mapEl()?.querySelectorAll('img') ?? [])].map((i) => i.getAttribute('src') ?? '')
+// Every picture "loads" first, so a sharper file that arrived with the spots replaces the first one, as in a browser.
+const mapImages = () => {
+  for (const img of [...(mapEl()?.querySelectorAll('img') ?? [])]) fireEvent.load(img)
+  return [...(mapEl()?.querySelectorAll('img') ?? [])].map((i) => i.getAttribute('src') ?? '')
+}
 const list = () => within(screen.getByRole('main'))
 
 vi.mock('../src/api/client', async (orig) => {
@@ -306,6 +310,24 @@ describe('App flow', () => {
     expect(await screen.findByRole('button', { name: 'Royal Oak' })).toBeInTheDocument()
     expect(new URLSearchParams(window.location.search).get('lat')).toBe('42.49')
     expect(await screen.findByText('Great night for stars.')).toBeInTheDocument()
+  })
+
+  it('a new start never frames or pins the old start spots while its own load', async () => {
+    go(START)
+    fetchSpots.mockResolvedValueOnce(response())
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    expect(within(mapEl()!).getByRole('button', { name: 'Lake Park Beach' })).toBeInTheDocument()
+    fetchSearch.mockResolvedValue([{ name: 'Ann Arbor', kind: 'Locality', lat: 42.28, lon: -83.74, metro: 'se_mi' }])
+    fetchSpots.mockReturnValue(new Promise(() => {}))
+    fireEvent.click(screen.getByRole('button', { name: 'Dropped pin' }))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ann' } })
+    fireEvent.click(await screen.findByRole('option', { name: /Ann Arbor/ }))
+    expect(await screen.findByRole('button', { name: 'Ann Arbor' })).toBeInTheDocument()
+    const map = within(mapEl()!)
+    expect(map.getByRole('img', { name: 'Your start' })).toBeInTheDocument()
+    expect(map.queryByRole('button', { name: 'Lake Park Beach' })).toBeNull()
+    expect(map.queryByRole('button', { name: 'Hidden Lake' })).toBeNull()
   })
 
   it('red mode keeps the glow on without touching the URL', async () => {

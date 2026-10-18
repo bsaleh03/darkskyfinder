@@ -171,6 +171,11 @@ function Main() {
   }
 
   const busy = spots.stale && !rateNotice
+  // The map frames its spots: stale results from another start (still on screen while the new ones load) would
+  // pull the framing back to the old area, so the map gets none until this start has results of its own.
+  const freshStart = useRef<string | null>(null)
+  if (data && !spots.stale && start) freshStart.current = pointKey(start)
+  const mapSpots = data && start && (!spots.stale || freshStart.current === pointKey(start)) ? data.spots : []
   const appClass = `app ${start ? 'app--results' : 'app--welcome'}${start && mapFull ? ' app--map-full' : ''}`
   return (
     <div className={appClass}>
@@ -222,7 +227,7 @@ function Main() {
         <div className="app-map">
           <StaticMap
             metro={mapMetro}
-            spots={data?.spots ?? []}
+            spots={mapSpots}
             start={start}
             selectedId={state.spot}
             glow={state.glow}
