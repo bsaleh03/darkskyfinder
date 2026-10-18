@@ -33,4 +33,18 @@ describe('placeLabels', () => {
     )
     expect(placed.map((p) => p.label.name)).toEqual(['Inside'])
   })
+
+  it('label overlapping a pin is dropped', () => {
+    // A pin box (16 px square at 100,50) and the start box are already taken; labels clear of them stay.
+    const pin = { x0: 92, y0: 42, x1: 108, y1: 58 }
+    const start = { x0: 288, y0: 138, x1: 312, y1: 162 }
+    const placed = placeLabels(
+      [label('Detroit', 120, 52, 1), label('Toledo', 300, 145, 2), label('Ann Arbor', 300, 50, 3)],
+      toScreen,
+      400,
+      200,
+      [pin, start],
+    )
+    expect(placed.map((p) => p.label.name)).toEqual(['Ann Arbor'])
+  })
 })

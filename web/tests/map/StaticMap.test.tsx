@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Spot } from '../../src/api/types'
 import { toRed } from '../../src/map/color'
-import { SAFE_INSET, StaticMap } from '../../src/map/StaticMap'
+import { FIT_INSET, overlayRects, PIN_R, START_R, StaticMap } from '../../src/map/StaticMap'
 import type { useMapManifest as UseMapManifest } from '../../src/map/useMapManifest'
 import { restoreView, stubView } from '../viewStub'
 
@@ -64,7 +64,30 @@ function renderMap(over: Partial<Parameters<typeof StaticMap>[0]> = {}) {
 }
 
 const srcs = (c: HTMLElement) => [...c.querySelectorAll('img')].map((i) => i.getAttribute('src') ?? '')
+const baseImgs = (c: HTMLElement) => [...c.querySelectorAll('img')].filter((i) => /\/base(_red)?_\d+\.webp$/.test(i.getAttribute('src') ?? ''))
+const baseSrcs = (c: HTMLElement) => baseImgs(c).map((i) => i.getAttribute('src') ?? '')
 const layerWidth = (c: HTMLElement) => parseFloat((c.querySelector('.static-map-image') as HTMLElement).style.width)
+
+/** Screen position (view px) and hit radius of the start and every pin. */
+function markPositions(c: HTMLElement) {
+  const layer = c.querySelector('.static-map-image') as HTMLElement
+  const [, tx, ty] = /translate\(([-\d.e]+)px, ([-\d.e]+)px\)/.exec(layer.style.transform)!.map(Number)
+  const w = parseFloat(layer.style.width)
+  const h = parseFloat(layer.style.height)
+  return [...c.querySelectorAll<HTMLElement>('.static-map-pin, .static-map-start')].map((m) => ({
+    x: tx + (parseFloat(m.style.left) / 100) * w,
+    y: ty + (parseFloat(m.style.top) / 100) * h,
+    r: m.classList.contains('static-map-start') ? START_R : PIN_R,
+  }))
+}
+
+/** The mark, with its hit radius, is outside both top-corner buttons and the collapsed attribution. */
+function expectClear(m: { x: number; y: number; r: number }, viewW: number, viewH: number) {
+  for (const o of Object.values(overlayRects(viewW, viewH))) {
+    const inside = m.x > o.x0 - m.r && m.x < o.x1 + m.r && m.y > o.y0 - m.r && m.y < o.y1 + m.r
+    expect(inside, `mark at ${m.x.toFixed(1)},${m.y.toFixed(1)} under overlay ${JSON.stringify(o)}`).toBe(false)
+  }
+}
 
 afterEach(() => {
   hook.value = READY
@@ -95,22 +118,33 @@ describe('StaticMap', () => {
     ]
     for (const spots of [spread, CORNERS, SPOTS]) {
       const { container, unmount } = renderMap({ spots })
-      const layer = container.querySelector('.static-map-image') as HTMLElement
-      const [, tx, ty] = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(layer.style.transform)!.map(Number)
-      const w = parseFloat(layer.style.width)
-      const h = parseFloat(layer.style.height)
-      const marks = [...container.querySelectorAll<HTMLElement>('.static-map-pin, .static-map-start')]
+      const marks = markPositions(container)
       expect(marks.length).toBe(spots.length + 1)
       for (const m of marks) {
-        const x = tx + (parseFloat(m.style.left) / 100) * w
-        const y = ty + (parseFloat(m.style.top) / 100) * h
-        expect(x).toBeGreaterThanOrEqual(SAFE_INSET.side)
-        expect(x).toBeLessThanOrEqual(375 - SAFE_INSET.side)
-        expect(y).toBeGreaterThanOrEqual(SAFE_INSET.top)
-        expect(y).toBeLessThanOrEqual(200 - SAFE_INSET.bottom)
+        expect(m.x).toBeGreaterThanOrEqual(FIT_INSET - 1e-6)
+        expect(m.x).toBeLessThanOrEqual(375 - FIT_INSET + 1e-6)
+        expect(m.y).toBeGreaterThanOrEqual(FIT_INSET - 1e-6)
+        expect(m.y).toBeLessThanOrEqual(200 - FIT_INSET + 1e-6)
+        expectClear(m, 375, 200)
       }
       unmount()
     }
+  })
+
+  it('uses most of a phone mini map height while keeping pins clear of the corner buttons and attribution', () => {
+    stubView(358, 198)
+    // Three spots about 1 degree apart north to south, plus the start.
+    const spots = [
+      spot({ id: 'n', display_name: 'North', lon: -83.2, lat: 43.0 }),
+      spot({ id: 'm', display_name: 'Middle', lon: -83.0, lat: 42.5 }),
+      spot({ id: 's', display_name: 'South', lon: -83.3, lat: 42.0 }),
+    ]
+    const { container } = renderMap({ spots })
+    const marks = markPositions(container)
+    expect(marks).toHaveLength(4)
+    const ys = marks.map((m) => m.y)
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThanOrEqual(0.6 * 198)
+    for (const m of marks) expectClear(m, 358, 198)
   })
 
   it('switching to red mounts fresh images instead of keeping the normal picture on screen', () => {
@@ -164,7 +198,120 @@ describe('StaticMap', () => {
     const before = layerWidth(container)
     view.resize(1200, 900)
     expect(layerWidth(container)).toBeGreaterThan(before)
-    expect(srcs(container)[0]).toMatch(/\/base_1750\.webp$/)
+    expect(baseSrcs(container).at(-1)).toMatch(/\/base_1750\.webp$/)
+  })
+
+  it('a tighter framing upgrades the width; the old picture stays until the new one loads', () => {
+    stubView(400, 300, 2)
+    const { container, props, rerender } = renderMap({ spots: CORNERS })
+    const [old] = baseImgs(container)
+    expect(old.getAttribute('src')).toMatch(/\/base_875\.webp$/)
+    rerender(<StaticMap {...props} spots={SPOTS} />)
+    // The sharper file loads on top; the one on screen stays mounted meanwhile.
+    expect(old.isConnected).toBe(true)
+    expect(baseSrcs(container)).toEqual([expect.stringMatching(/\/base_875\.webp$/), expect.stringMatching(/\/base_3500\.webp$/)])
+    const sharper = baseImgs(container)[1]
+    fireEvent.load(sharper)
+    expect(old.isConnected).toBe(false)
+    expect(sharper.isConnected).toBe(true)
+    expect(baseSrcs(container)).toEqual([expect.stringMatching(/\/base_3500\.webp$/)])
+  })
+
+  it('a wider framing does not downgrade the width', () => {
+    stubView(400, 300, 2)
+    const { container, props, rerender } = renderMap({ spots: SPOTS })
+    expect(baseSrcs(container)).toEqual([expect.stringMatching(/\/base_3500\.webp$/)])
+    const img = baseImgs(container)[0]
+    rerender(<StaticMap {...props} spots={CORNERS} />)
+    expect(baseImgs(container)).toEqual([img])
+    expect(baseSrcs(container)).toEqual([expect.stringMatching(/\/base_3500\.webp$/)])
+  })
+
+  it('a new mode starts the width tiers over', () => {
+    stubView(400, 300, 2)
+    const { container, props, rerender } = renderMap({ spots: SPOTS })
+    rerender(<StaticMap {...props} spots={CORNERS} />)
+    rerender(<StaticMap {...props} spots={CORNERS} red />)
+    expect(baseSrcs(container)).toEqual([expect.stringMatching(/\/base_red_875\.webp$/)])
+  })
+
+  it('glow always uses the smallest width', () => {
+    stubView(1200, 900, 2)
+    const { container } = renderMap({ spots: SPOTS })
+    expect(baseSrcs(container)).toEqual([expect.stringMatching(/\/base_3500\.webp$/)])
+    expect(srcs(container).filter((s) => s.includes('/glow_'))).toEqual([expect.stringMatching(/\/glow_875\.webp$/)])
+  })
+
+  it('selected pin is pressed', () => {
+    stubView(400, 300)
+    renderMap({ selectedId: 's1' })
+    expect(screen.getByRole('button', { name: 'Lake Park Beach' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Hidden Lake' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('the status region stays mounted and gets the unavailable text', () => {
+    stubView(400, 300)
+    const { props, rerender } = renderMap()
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('')
+    hook.value = { manifest: null, labels: [], status: 'error' }
+    rerender(<StaticMap {...props} />)
+    expect(screen.getByRole('status')).toBe(status)
+    expect(status).toHaveTextContent('Map unavailable right now')
+  })
+
+  it('a broken picture retries when the start changes', () => {
+    stubView(400, 300)
+    const { container, props, rerender } = renderMap()
+    fireEvent.error(baseImgs(container)[0])
+    expect(screen.getByRole('status')).toHaveTextContent('Map unavailable right now')
+    expect(container.querySelectorAll('img')).toHaveLength(0)
+    rerender(<StaticMap {...props} start={{ lon: -83.2, lat: 42.45 }} />)
+    expect(screen.getByRole('status')).toHaveTextContent('')
+    expect(baseImgs(container)).toHaveLength(1)
+  })
+
+  it('a broken glow hides the glow; the toggle then retries it', () => {
+    stubView(400, 300)
+    const { container, props } = renderMap({ glow: true })
+    const glowImg = () => [...container.querySelectorAll('img')].find((i) => i.getAttribute('src')!.includes('/glow_'))
+    fireEvent.error(glowImg()!)
+    expect(glowImg()).toBeUndefined()
+    const toggle = screen.getByRole('button', { name: 'Light pollution glow' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(toggle)
+    expect(props.onToggleGlow).not.toHaveBeenCalled()
+    expect(glowImg()).toBeDefined()
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('attribution is one line with an info button that expands it', () => {
+    stubView(400, 300)
+    const { container } = renderMap()
+    const btn = screen.getByRole('button', { name: 'Map data sources' })
+    const box = container.querySelector('.static-map-attribution')!
+    expect(btn).toHaveAttribute('aria-expanded', 'false')
+    expect(box.className).not.toContain('static-map-attribution--open')
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-expanded', 'true')
+    expect(box.className).toContain('static-map-attribution--open')
+  })
+
+  it('labels never overlap a pin or the start', () => {
+    stubView(400, 300)
+    // A label right on the selected pin is dropped; one clear of every pin stays.
+    hook.value = {
+      ...READY,
+      labels: [
+        { name: 'Pinned', lon: -83.5, lat: 42.5, rank: 1 },
+        { name: 'Started', lon: -83.14, lat: 42.49, rank: 2 },
+        { name: 'Clear', lon: -83.3, lat: 42.65, rank: 3 },
+      ],
+    }
+    renderMap({ selectedId: 's1' })
+    expect(screen.queryByText('Pinned')).toBeNull()
+    expect(screen.queryByText('Started')).toBeNull()
+    expect(screen.getByText('Clear')).toBeInTheDocument()
   })
 
   it('shows unavailable state when the manifest fails', () => {

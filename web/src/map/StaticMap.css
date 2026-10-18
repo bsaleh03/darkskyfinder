@@ -136,20 +136,68 @@
   outline-offset: 2px;
 }
 
+/* One line, ellipsized, at most 20 px tall; the info button opens the full text over the picture. */
 .static-map-attribution {
   position: absolute;
-  pointer-events: none;
   right: 0;
   bottom: 0;
   z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   max-width: 100%;
-  margin: 0;
-  padding: 2px 6px;
+  height: 20px;
+  padding: 2px 2px 2px 6px;
   color: var(--muted);
   background: var(--glass);
   border-top-left-radius: 6px;
   font-size: 10px;
-  line-height: 1.3;
+  line-height: 16px;
+}
+
+.static-map-attribution-text {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.static-map-attribution--open {
+  align-items: flex-end;
+  height: auto;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.static-map-attribution--open .static-map-attribution-text {
+  white-space: normal;
+}
+
+.static-map-attribution-btn {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 10px;
+  line-height: 14px;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.static-map-attribution-btn[aria-expanded="true"] {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.static-map-attribution-btn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }
 
 .static-map-message {
@@ -162,6 +210,16 @@
   padding: 16px;
   color: var(--muted);
   text-align: center;
+}
+
+/* The status region stays mounted (for screen readers) but takes no room while it is empty. */
+.static-map-message:empty {
+  inset: auto;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 @media (prefers-reduced-motion: reduce) {
