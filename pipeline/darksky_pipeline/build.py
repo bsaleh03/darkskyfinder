@@ -22,7 +22,7 @@ from .dedupe import apply_display_names, merge_duplicates
 from .extract import THEMES, connect, extract_theme
 from .features import GlareModel, HorizonModel, building_points
 from .geo import Projector
-from .roads import build_road_network, find_viewing_point, parking_points
+from .roads import build_road_network, find_entry, find_viewing_point, parking_points
 from .search_index import build_search_index, search_rows
 from .spots import build_candidates
 from .tiles import basemap_extract_commands, run_commands
@@ -96,7 +96,8 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
             dropped.append(c.id)
             continue
         spots.append(assemble_spot(c, vp, glare_model.at(vp.x, vp.y), horizon_model.at(vp.x, vp.y),
-                                   amenity_finder.near(vp.x, vp.y), curated.get(c.id)))
+                                   amenity_finder.near(vp.x, vp.y), curated.get(c.id),
+                                   entry=find_entry(c.area, roads, parking_xy, projector, region=region)))
     log.info("%d spots, %d dropped (no drivable access)", len(spots), len(dropped))
 
     spots, merged = merge_duplicates(spots)

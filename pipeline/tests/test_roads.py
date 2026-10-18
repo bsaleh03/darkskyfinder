@@ -7,7 +7,7 @@ from darksky_pipeline import config
 from darksky_pipeline.darkness import DarknessGrid
 from overture_fixture import REGION_BBOX, TEST_EPSG
 from darksky_pipeline.roads import (RoadNetwork, build_road_network, find_viewing_point, is_paved,
-                                    is_private, parking_points, sample_points)
+                                    is_private, parking_points, sample_points, find_entry)
 
 
 @pytest.mark.parametrize("value,expected", [
@@ -158,3 +158,39 @@ def test_samples_lie_on_their_roads(road_network, candidates):
     d = shapely.distance(road_network.geoms[road_idx], shapely.points(xy))
     assert np.all(d < 1e-6)
     assert np.all(shapely.dwithin(area, shapely.points(xy), config.ACCESS_SEARCH_M + 1e-6))
+
+
+def _lonlat_of(projector, pt_xy):
+    return projector.to_lonlat(pt_xy[0], pt_xy[1])
+
+
+def test_entry_prefers_parking(projector):
+    net = build_road_network(_segments([("primary", "LINESTRING(-84.335 41.908, -84.305 41.908)")]), projector)
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    px, py = projector.to_xy(np.array([-84.32]), np.array([41.9115]))
+    parking = np.column_stack([px, py])
+    lon, lat = find_entry(area, net, parking, projector)
+    assert abs(lon + 84.32) < 1e-5 and abs(lat - 41.9115) < 1e-5
+
+
+def test_entry_prefers_higher_class_road(projector):
+    # residential touches the area's edge; the tertiary road is farther but a higher class
+    net = build_road_network(_segments([
+        ("residential", "LINESTRING(-84.335 41.9105, -84.305 41.9105)"),
+        ("tertiary", "LINESTRING(-84.335 41.912, -84.305 41.912)"),
+        ("service", "LINESTRING(-84.335 41.9101, -84.305 41.9101)"),
+    ]), projector)
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    lon, lat = find_entry(area, net, np.empty((0, 2)), projector)
+    assert abs(lat - 41.912) < 1e-4
+    assert -84.331 < lon < -84.309
+
+
+def test_entry_none_when_only_tracks(projector):
+    net = build_road_network(_segments([
+        ("track", "LINESTRING(-84.335 41.905, -84.305 41.905)"),
+        ("service", "LINESTRING(-84.335 41.906, -84.305 41.906)"),
+        ("motorway", "LINESTRING(-84.335 41.907, -84.305 41.907)"),
+    ]), projector)
+    area = _box_xy(projector, -84.33, 41.89, -84.31, 41.91)
+    assert find_entry(area, net, np.empty((0, 2)), projector) is None
