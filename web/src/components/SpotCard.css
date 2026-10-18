@@ -157,25 +157,44 @@
   color: var(--muted);
 }
 
-.scrubber {
-  display: flex;
-  gap: 4px;
-  padding: 0;
+.scrubber-wrap {
   margin: 12px 0 0;
+}
+
+/* Equal hour columns (--scrubber-col, measured to fit whole columns in the view; gap = SCRUBBER_GAP in
+   NightScrubber.tsx), snapped to column starts, with a thin themed scrollbar. */
+.scrubber {
+  display: grid;
+  grid-auto-columns: var(--scrubber-col, 52px);
+  grid-auto-flow: column;
+  gap: 4px;
+  padding: 0 0 6px;
+  margin: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   list-style: none;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* More hours off-screen: the right edge fades out (alpha mask only, no colour of its own). */
+.scrubber-wrap--more .scrubber {
+  mask-image: linear-gradient(to left, transparent, currentcolor 28px);
 }
 
 .scrubber-hour {
+  box-sizing: border-box;
   display: flex;
-  flex: 1 0 36px;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
-  padding: 4px 2px;
-  font-size: 0.7rem;
+  min-width: 0;
+  padding: 6px 2px;
+  font-size: 0.72rem;
   border: 1px solid transparent;
   border-radius: 8px;
+  scroll-snap-align: start;
   transition: opacity 0.2s;
 }
 
@@ -183,6 +202,7 @@
   opacity: 0.35;
 }
 
+/* Same box for every hour (the border is always there, transparent outside the best window): nothing shifts. */
 .scrubber-hour--best {
   border-color: var(--amber);
 }
@@ -203,15 +223,26 @@
   border-radius: 4px;
 }
 
+/* Three fixed-height rows (cloud, fog, moon) in every hour, so they line up across the columns. */
 .scrubber-icons {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 1em;
+  display: grid;
+  grid-template-rows: repeat(3, 1rem);
+  justify-items: center;
+  width: 100%;
   color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1rem;
+}
+
+.scrubber-icon {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .scrubber-time {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--muted);
   white-space: nowrap;
 }
