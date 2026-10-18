@@ -13,13 +13,14 @@ Overture Maps supplies the places and the map:
 - **Land use / land cover**: filters to park-like, open land and informs the basemap.
 - **Transportation**: road network for the basemap and access sanity checks.
 - **Buildings**: building footprints for the basemap, and a nearby-building count that feeds the per-spot glare factor.
-- **Divisions**: localities, regions and borders for search and the basemap (including the Canada border option).
+- **Divisions**: localities, regions and borders for search and the basemap; they also give each spot its country and
+  state, which drive the `Crosses country border` and `Crosses state border` filters.
 
 These are extracted for each metro into a **PMTiles** basemap in a moonlit style (`base`, `transportation`,
 `buildings`, `divisions`). Sky darkness comes from **VIIRS Nighttime Lights**, resampled to a darkness grid used
 for scoring and a light-pollution glow. Offline, the basemap and glow are rendered into one static picture per
 region at two levels (normal and red-mode variants, WebP): level 0 is the whole picture at three widths, level 1
-is a 2x2 grid of tiles at twice the full width. The app picks the level the view needs, keeps the level-0 picture
+is a 2x2 grid of base tiles at twice the full width (the glow stays at level 0). The app picks the level the view needs, keeps the level-0 picture
 underneath and loads only the level-1 tiles in view, and draws the pins, start and place labels over them, with no
 map library at runtime. Weather comes from Open-Meteo, drive times
 from OpenRouteService (straight-line estimates without a key).
@@ -69,8 +70,8 @@ python -m darksky_pipeline.static_maps --metro bay_area --viirs data/viirs/vnl_a
 
 Map pictures (renders each region with MapLibre in headless Chromium, then writes
 `pipeline/out/maps/<metro>/web/`: `manifest.json` (v2, with `levels` and `tiles`), `labels.json`,
-`{base,base_red,glow,glow_red}_<width>.webp` at three level-0 widths and `{base,base_red,glow,glow_red}_L1_<c>_<r>.webp`
-for the 2x2 level-1 tiles, 28 pictures per region; red variants are pixel-checked):
+`{base,base_red,glow,glow_red}_<width>.webp` at three level-0 widths and `{base,base_red}_L1_<c>_<r>.webp`
+for the 2x2 level-1 tiles, 20 pictures per region; the glow is level 0 only; red variants are pixel-checked):
 
 ```bash
 cd web
@@ -107,18 +108,21 @@ the Render secrets yourself; no credentials are stored in this repo.
 2. **R2 bucket**: create bucket `darksky-tiles`, enable the public `r2.dev` URL, and apply the CORS policy
    in `scripts/r2-cors.json` (bucket Settings, CORS Policy). Replace the placeholder
    `https://darksky-web.onrender.com` origin with your real site URL if it differs.
-3. **Upload the map pictures** (about 62 MB, 60 files). Create an R2 API token (Object Read & Write) and configure
+3. **Upload the map pictures** (about 25 MB, 44 files). Create an R2 API token (Object Read & Write) and configure
    rclone once: `rclone config`, new remote named `r2`, storage `s3`, provider `Cloudflare`, enter the access
    key and secret, endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. Then:
    ```bash
-   scripts/upload_tiles.sh --dry-run   # 2 regions x (manifest + labels + 4 variants x (3 widths + 4 tiles)) = 60 files
+   scripts/upload_tiles.sh --dry-run   # 2 regions x (manifest + labels + 4 variants x 3 widths + 2 base variants x 4 tiles) = 44 files
    scripts/upload_tiles.sh
    ```
    Run it after the pipeline, `python -m darksky_pipeline.static_maps` and `npm run render-maps` (see Local
    development). The script copies `pipeline/out/maps/<metro>/web/` to `r2:darksky-tiles/maps/<metro>/`, allowing
    only `manifest.json`, `labels.json`, `(base|base_red|glow|glow_red)_<width>.webp` for the widths the manifest
-   lists and `(base|base_red|glow|glow_red)_L<l>_<c>_<r>.webp` for every tile of its levels, and refuses anything
-   else. The bucket holds only `maps/`; PMTiles stay local (they are render inputs).
+   lists and `(base|base_red)_L<l>_<c>_<r>.webp` for every tile of its levels (the glow is level 0 only), and refuses
+   anything else. The bucket holds only `maps/`; PMTiles stay local (they are render inputs).
+   Caching: the pictures are cached for 1 day under fixed names, the manifest and labels for 5 minutes. After a
+   re-render that changes the bounds, widths or levels, browsers can pair the new manifest with day-old pictures, so
+   wait a day before relying on it, or purge the R2/CDN cache (or rename the pictures) when you upload.
    The API's data files ship with the API (`api/data`), not via R2.
 4. **Render Blueprint**: New > Blueprint, pick the repo; it reads `render.yaml` and creates `darksky-api`
    and `darksky-web`. When prompted, enter the secrets:
