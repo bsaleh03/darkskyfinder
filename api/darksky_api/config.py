@@ -35,7 +35,9 @@ NIGHT_DAYS_AHEAD = 6
 DEFAULT_MAX_DRIVE = 90
 MIN_MAX_DRIVE, MAX_MAX_DRIVE = 15, 240
 DEFAULT_LIMIT, MAX_LIMIT = 25, 50
-PREFILTER_KM_PER_MIN = 1.2
+# Straight-line km per minute of max_drive kept before routing. Calibrated ORS times (x0.8) on
+# freeways cover ~1.3 km/min straight-line, so 1.5 leaves headroom.
+PREFILTER_KM_PER_MIN = 1.5
 PREFILTER_MAX_SPOTS = 50
 MAX_UNAVAILABLE_SHOWN = 10
 
@@ -52,6 +54,8 @@ FALLBACK_SPEED_KMH = 95.0  # Google's samples average ~70 km/h straight-line; x1
 # ORS runs slower than Google Maps. Calibration samples (Google min / ORS min, same endpoints):
 # Ortonville 39/52, Crosswinds Marsh 39/57, Ann Arbor 53/60, Detroit 20/22, SF->Livermore 50/56
 # (ratios 0.68-0.91). Applied to ORS durations only, never to fallback estimates.
+# 0.8 sits between the sample median (0.88) and the exurban freeway samples (0.68-0.75): a judgement
+# call that favours the longer dark-site drives this app is mostly used for.
 ROUTE_TIME_FACTOR = 0.8
 
 # Forecast (Open-Meteo)
