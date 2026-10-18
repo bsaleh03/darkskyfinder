@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move rarely used filters into More filters, add a state-border filter end to end, state coverage on the welcome screen, and make the map (base and night-sky glow) much sharper with multi-level tiled pictures.
+**Goal:** Move rarely used filters into More filters, add a state-border filter end to end, state coverage on the welcome screen, and make the map (base and night-sky glow) not look blurry, with a two-level tiled picture and a smooth, properly sized glow.
 
-**Architecture:** Spots gain an ISO 3166-2 `region` in the pipeline; the API derives `crosses_state` against each metro's home region and filters on `state_border`. The web moves filters into More filters. The map becomes a 3-level picture pyramid (level 0 = today's single picture; levels 1/2 = 2×2 and 4×4 grids at 2×/4× resolution) for both base and glow; the app loads only visible pieces of the lowest sharp level over the always-present level 0.
+**Architecture:** Spots gain an ISO 3166-2 `region` in the pipeline; the API derives `crosses_state` against each metro's home region and filters on `state_border`. The web moves filters into More filters. The map becomes a 2-level picture pyramid (level 0 = today's single picture with ¼/½/full sizes; level 1 = a 2×2 grid at 2× resolution) for both base and glow; the app loads only visible pieces of the lowest sharp level over the always-present level 0.
 
 **Tech Stack:** Python (rasterio, numpy, duckdb, shapely, FastAPI), Node (Playwright, MapLibre dev-only, sharp), React 18 + TanStack Query, Vitest, Playwright e2e.
 
@@ -15,8 +15,8 @@
 - Welcome line verbatim: `We currently cover southeast Michigan and the SF Bay Area.`
 - URL/API: `state_border=include|exclude` (default `include`); response field `crosses_state`; spots JSON field `region` (ISO 3166-2, e.g. `US-MI`); spots/API schema version 4.
 - Home regions: `se_mi` → `US-MI`, `bay_area` → `US-CA`. `crosses_state = region is not None and region != home_region and country == home_country`.
-- Every image ≤ 16,000,000 pixels; level 0 sizes ¼/½/full as today; level 1 = 2×2 tiles, level 2 = 4×4 tiles, each tile = level-0 full size.
-- Base and glow both exist at every level, normal and red; red files pass the decoded pixel check (no visible pixel with g or b > r/2).
+- Every image ≤ 16,000,000 pixels; level 0 sizes ¼/½/full as today; level 1 = 2×2 tiles, each tile = level-0 full size. (User: "we don't need very high res, it just needs to not look blurry" — no level 2.)
+- Base and glow both exist at every level and level-0 size (glow is NOT pinned to the smallest width any more), normal and red; red files pass the decoded pixel check (no visible pixel with g or b > r/2).
 - Glow: smooth, no visible pixel blocks at any framing; computed from VIIRS with cubic resampling and the existing sky-glow model and color ramps.
 - Registration: base, glow tiles, pins and labels line up within 2 px (Web Mercator).
 - The app never shows a blank or partial picture: level 0 always under higher levels; never steps down a level/width within the same metro+mode; red mode loads only red files.
@@ -27,7 +27,7 @@
 2. An R2 manifest without `levels` (pictures rendered before this change) → the app still works at level 0 (Task 6 test `old manifest works at level 0`).
 3. A higher-level tile fails to load → level 0 stays visible; no unavailable state (Task 6 test `tile error keeps level 0`).
 4. `state_border=exclude` combined with `access=likely` and the night dots → dot queries and spot queries both carry `state_border` (Task 3 test `state_border flows into spots and dot queries`).
-5. Resizing across a level threshold → level never drops; the right tiles for the new view load (Task 6 test `resize keeps level and loads visible tiles`).
+5. Resizing across the level threshold → level never drops; the right tiles for the new view load (Task 6 test `resize keeps level and loads visible tiles`).
 
 ---
 
@@ -68,31 +68,31 @@
 - [ ] **Step 4: Run** `npx vitest run`, `npx tsc --noEmit`, `npm run lint:css` → PASS.
 - [ ] **Step 5: Commit** `feat(web): More filters with likely open, country and state border; coverage line`.
 
-### Task 4: Pipeline: glow at every level, smooth
+### Task 4: Pipeline: glow at both levels, smooth
 
 **Files:** Modify `pipeline/darksky_pipeline/static_maps.py`, `config.py`, tests.
 
-**Interfaces:** Config `STATIC_MAP_LEVELS = (0, 1, 2)`, `STATIC_MAP_GLOW_RES_M = 200`. Darkness grid computed once at 200 m with VIIRS resampled **cubic** (not average) — via a `resampling` parameter on `build_darkness_grid` (default unchanged for spots). `glow_tile_rgba(grid, bounds, level, col, row, width0, height0, stops) -> np.ndarray` warps the sqm grid (cubic) to the tile's Web-Mercator sub-rectangle (tile size = level-0 full size; level 0 = whole extent). Outputs in `pipeline/out/maps/<metro>/glow/`: `L0.png`, `L0_red.png`, `L{l}_{c}_{r}.png`, `L{l}_{c}_{r}_red.png` for l ≥ 1; `extent.json` gains `"levels": [0, 1, 2]`.
+**Interfaces:** Config `STATIC_MAP_LEVELS = (0, 1)`, `STATIC_MAP_GLOW_RES_M = 200`. Darkness grid computed once at 200 m with VIIRS resampled **cubic** (not average) — via a `resampling` parameter on `build_darkness_grid` (default unchanged for spots). `glow_tile_rgba(grid, bounds, level, col, row, width0, height0, stops) -> np.ndarray` warps the sqm grid (cubic) to the tile's Web-Mercator sub-rectangle (tile size = level-0 full size; level 0 = whole extent). Outputs in `pipeline/out/maps/<metro>/glow/`: `L0.png`, `L0_red.png`, `L{l}_{c}_{r}.png`, `L{l}_{c}_{r}_red.png` for l ≥ 1; `extent.json` gains `"levels": [0, 1]`.
 
-- [ ] **Step 1: Failing tests**: tile sub-rectangles tile the extent exactly (corners of tile (c,r) at level l equal the Mercator fractions c/2^l, r/2^l); `glow_tile_rgba` shape = level-0 full size; smoothness: on the fixture city, adjacent-pixel alpha differences at level 2 are ≤ a small bound (no step edges ≥ 3× the median gradient); red tiles pass the ramp check; `resampling` default stays `average` for spots.
+- [ ] **Step 1: Failing tests**: tile sub-rectangles tile the extent exactly (corners of tile (c,r) at level l equal the Mercator fractions c/2^l, r/2^l); `glow_tile_rgba` shape = level-0 full size; smoothness: on the fixture city, adjacent-pixel alpha differences at level 1 are ≤ a small bound (no step edges ≥ 3× the median gradient); red tiles pass the ramp check; `resampling` default stays `average` for spots.
 - [ ] **Step 2: Run** pytest → FAIL. **Step 3: Implement.** **Step 4: Run** full pytest → PASS.
 - [ ] **Step 5: Generate** both metros (`python -m darksky_pipeline.static_maps ...` as before). Report runtime, memory, file counts.
-- [ ] **Step 6: Commit** `feat(pipeline): smooth glow at three levels for the static map`.
+- [ ] **Step 6: Commit** `feat(pipeline): smooth glow at two levels for the static map`.
 
-### Task 5: Render and upload: base at three levels, manifest v2
+### Task 5: Render and upload: base at two levels, manifest v2
 
 **Files:** Modify `web/scripts/render-maps.mjs`, `web/render/main.ts` (accept explicit sub-bounds and zoom), `web/render/sizes.ts`, tests in `web/tests/render/`, `scripts/upload_tiles.sh`.
 
 **Interfaces:** Manifest v2 adds, keeping all v1 fields:
 ```ts
-levels: { level: number; cols: number; rows: number }[]   // [{0,1,1},{1,2,2},{2,4,4}]
+levels: { level: number; cols: number; rows: number }[]   // [{0,1,1},{1,2,2}]
 tiles: { base: string; base_red: string; glow: string; glow_red: string } // e.g. "base_L{l}_{c}_{r}.webp"
 ```
-Tile pixel size = level-0 full `w × h`; level l full image = `w·2^l × h·2^l`. Base tiles are rendered by fitting the map to each tile's Mercator sub-bounds at canvas `w × h`. Glow tiles come from Task 4 PNGs. Encoding as today (base lossy q82; red lossless; glow near-lossless with red pixel-check after decode). Upload allow-list derives every file name from the manifest (level 0 widths + tiles for each level); counts reported.
+Tile pixel size = level-0 full `w × h`; level l full image = `w·2^l × h·2^l`. Base tiles are rendered by fitting the map to each tile's Mercator sub-bounds at canvas `w × h`. Glow level-0 sizes (¼/½/full) are resized from `L0.png`; glow tiles come from Task 4 PNGs. Encoding as today (base lossy q82; red lossless; glow near-lossless with red pixel-check after decode). Upload allow-list derives every file name from the manifest (level 0 widths + tiles for each level); counts reported.
 
-- [ ] **Step 1: Failing tests**: `tileBounds(bounds, level, col, row)` returns exact Mercator sub-rectangles (round-trip with `toFraction`); manifest v2 shape; upload stub dry-run lists exactly `2 × (2 + 4×3 + 4×(4+16))` = 188 files.
-- [ ] **Step 2–4:** FAIL → implement → run vitest/tsc; run `npm run render-maps` for both metros; verify every tile's corner registration ≤ 2 px and red checks; report per-region totals and the largest level-2 tile sizes; look at a level-2 Detroit base tile and glow tile and describe them.
-- [ ] **Step 5: Commit** `feat(web): render base and glow at three levels; manifest v2; upload all levels`.
+- [ ] **Step 1: Failing tests**: `tileBounds(bounds, level, col, row)` returns exact Mercator sub-rectangles (round-trip with `toFraction`); manifest v2 shape; upload stub dry-run lists exactly `2 × (2 + 4×3 + 4×4)` = 60 files.
+- [ ] **Step 2–4:** FAIL → implement → run vitest/tsc; run `npm run render-maps` for both metros; verify every tile's corner registration ≤ 2 px and red checks; report per-region totals and the largest level-1 tile sizes; look at a level-1 Detroit base tile and glow tile and describe them.
+- [ ] **Step 5: Commit** `feat(web): render base and glow at two levels; manifest v2; upload all levels`.
 
 ### Task 6: App: pick a level, load visible tiles, never blank
 
@@ -100,6 +100,6 @@ Tile pixel size = level-0 full `w × h`; level l full image = `w·2^l × h·2^l`
 
 **Interfaces:** `chooseLevel(levels, fullWidth0, imgW, dpr): number` = smallest level with `fullWidth0·2^level ≥ imgW·dpr`, else the highest; `visibleTiles(level, cols, rows, viewBox: Box): {col,row}[]` = tiles intersecting the visible fraction rectangle. StaticMap renders: level-0 base + glow as today; for level ≥ 1, tile `<img>`s absolutely positioned at their fraction rects in the same layer (same transform as pins), each faded in on load; the chosen level never decreases while metro+mode are unchanged; red uses only red files at every level.
 
-- [ ] **Step 1: Failing tests**: `chooseLevel` thresholds; `visibleTiles` for corner/center views; `old manifest works at level 0`; `tile error keeps level 0`; `resize keeps level and loads visible tiles`; red mode at level 2 requests only `_red` tile files; glow follows the same level as base.
+- [ ] **Step 1: Failing tests**: `chooseLevel` thresholds; `visibleTiles` for corner/center views; `old manifest works at level 0`; `tile error keeps level 0`; `resize keeps level and loads visible tiles`; red mode at level 1 requests only `_red` tile files; glow follows the same level and level-0 width as base (no more smallest-width glow).
 - [ ] **Step 2–4:** FAIL → implement → `npx vitest run`, tsc, lint:css, build, `npm run e2e` (update snapshots once, then a clean pass; describe the baselines).
 - [ ] **Step 5: Commit** `feat(web): multi-level sharp map with visible-tile loading`.

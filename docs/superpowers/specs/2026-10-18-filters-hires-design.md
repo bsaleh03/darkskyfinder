@@ -35,9 +35,9 @@ Under the headline: **"We currently cover southeast Michigan and the SF Bay Area
 ## 5. High-resolution map
 - **Source stays Overture** (not satellite imagery): Overture is the project's required data source and the base
   picture is its most visible use; a daytime satellite photo also fights the night/red-mode look. Glow stays VIIRS.
-- **Levels:** each region's base picture (and its red variant) is rendered at three levels: level 0 = today's single
-  picture (≤ 16 MP, with its ¼/½/full sizes); level 1 = 2× the resolution as a 2×2 grid of pictures; level 2 = 4× as a
-  4×4 grid. Every grid picture ≤ 16 MP. Michigan level 2 ≈ 25 m per pixel.
+- **Levels (amended: "we don't need very high res, it just needs to not look blurry"):** each region's base picture
+  (and its red variant) is rendered at two levels: level 0 = today's single picture (≤ 16 MP, with its ¼/½/full sizes);
+  level 1 = 2× the resolution as a 2×2 grid of pictures (Michigan ≈ 50 m per pixel). Every grid picture ≤ 16 MP.
 - Higher levels are rendered at the matching map zoom so more Overture detail appears (e.g. minor roads from z11).
 - **Loading:** the app picks the lowest level that is sharp for the current framing and screen (image width × device
   pixel ratio), loads only the grid pictures that intersect the view, and keeps the lower level visible underneath
@@ -45,7 +45,7 @@ Under the headline: **"We currently cover southeast Michigan and the SF Bay Area
   Red mode uses only red pictures at every level.
 - **Glow is rendered per level too** (the user's main complaint: the night lights looked low-res). VIIRS resolves
   only ~450 m and no higher-resolution free night-lights data exists, so the goal is a smooth, crisp-looking glow, not
-  invented detail: compute the darkness grid on a finer grid per level (≈ 400 / 200 / 100 m for levels 0 / 1 / 2)
+  invented detail: compute the darkness grid on a finer grid (≈ 200 m), serve it at the same sizes as the base
   with smooth (cubic) resampling of the VIIRS radiance, apply the same sky-glow model and color ramps, and cut it into
   the same grid as the base. Towns should read as soft-edged glows with no visible pixel blocks at any framing. Glow
   pictures may use near-lossless WebP to stay small; red glow is still pixel-checked. This replaces the earlier ruling
