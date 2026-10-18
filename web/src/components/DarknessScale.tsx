@@ -41,15 +41,21 @@ export function DarknessScale({ homeSqm, spotSqm, homeLabel = 'Home' }: Props) {
         </span>
       </div>
       <ol className="darkness-labels" aria-hidden="true">
-        {BANDS.map((b, i) => (
-          <li
-            key={b.label}
-            className={i === BANDS.length - 1 ? 'darkness-label darkness-label--end' : 'darkness-label'}
-            style={i === BANDS.length - 1 ? undefined : { left: `${i === 0 ? 0 : pct(b.min)}%` }}
-          >
-            {b.label}
-          </li>
-        ))}
+        {/* Alternate rows: on narrow cards "Milky Way" (≈62% across) would otherwise run into the
+            right-aligned "Milky Way casts shadows" and read as "Milky Milky Way…". */}
+        {BANDS.map((b, i) => {
+          const end = i === BANDS.length - 1
+          const cls = ['darkness-label', end && 'darkness-label--end', i % 2 === 1 && 'darkness-label--lower']
+          return (
+            <li
+              key={b.label}
+              className={cls.filter(Boolean).join(' ')}
+              style={end ? undefined : { left: `${i === 0 ? 0 : pct(b.min)}%` }}
+            >
+              {b.label}
+            </li>
+          )
+        })}
       </ol>
     </div>
   )

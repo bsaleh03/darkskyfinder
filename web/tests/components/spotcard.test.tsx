@@ -228,6 +228,14 @@ describe('fix round 1', () => {
     expect(screen.getByRole('img', { name: 'This spot: Milky Way' })).toBeTruthy()
   })
 
+  it('darkness scale labels alternate rows so neighbours never overlap on narrow cards', () => {
+    const { container } = render(<DarknessScale homeSqm={19} spotSqm={21} />)
+    const labels = [...container.querySelectorAll('.darkness-label')]
+    expect(labels.map((l) => l.textContent)).toEqual(['City', 'A few stars', 'Milky Way', 'Milky Way casts shadows'])
+    // "Milky Way" (≈62% across) and the right-aligned "Milky Way casts shadows" sit on different rows.
+    expect(labels.map((l) => l.classList.contains('darkness-label--lower'))).toEqual([false, true, false, true])
+  })
+
   it('clicking header calls onToggle', () => {
     let n = 0
     show(spot(), { onToggle: () => void n++ })

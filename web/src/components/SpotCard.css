@@ -248,7 +248,7 @@
 
 .darkness-labels {
   position: relative;
-  height: 1.2em;
+  height: 2.6em;
   padding: 0;
   margin: 0;
   font-size: 0.65rem;
@@ -264,6 +264,10 @@
 
 .darkness-label--end {
   right: 0;
+}
+
+.darkness-label--lower {
+  top: 1.35em;
 }
 
 .why-chips {
