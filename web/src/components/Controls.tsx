@@ -147,7 +147,7 @@ export function Controls({ state, metro, showVerified, onChange }: Props) {
             on={state.access === 'likely'}
             onToggle={() => onChange({ access: state.access === 'likely' ? 'all' : 'likely' })}
           />
-          {showVerified && (
+          {(showVerified || state.access === 'verified') && (
             <Switch
               label="Verified only"
               on={state.access === 'verified'}

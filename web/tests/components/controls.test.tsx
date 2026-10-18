@@ -142,6 +142,16 @@ describe('Controls', () => {
     expect(onChange).toHaveBeenLastCalledWith({ access: 'likely' })
   })
 
+  it('Verified only stays visible while it is on, even without showVerified, so it can be turned off', async () => {
+    const onChange = setup({ access: 'verified' }, 'se_mi', false)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'More filters (1 on)' }))
+    const v = screen.getByRole('switch', { name: 'Verified only' })
+    expect(v).toHaveAttribute('aria-checked', 'true')
+    await user.click(v)
+    expect(onChange).toHaveBeenLastCalledWith({ access: 'all' })
+  })
+
   it('segmented arrow keys move selection and focus', async () => {
     const onChange = setup()
     const user = userEvent.setup()
