@@ -34,6 +34,7 @@ const state: AppState = {
   sort: 'relevant',
   access: 'all',
   border: 'include',
+  stateBorder: 'include',
   glow: true,
   spot: null,
 }
@@ -203,6 +204,23 @@ describe('useNightDots requests', () => {
     rerender({ s: { ...state, sort: 'closest', drive: 120 } })
     await settle(500)
     expect(dotCalls()).toHaveLength(4)
+  })
+
+  it('state_border flows into spots and dot queries', async () => {
+    fetchSpots.mockImplementation(async (p) => resp('good', p.night ?? '2026-10-17'))
+    const { rerender } = renderHook(({ s }) => useNightDots(s, nights), {
+      wrapper: wrapper(),
+      initialProps: { s: state },
+    })
+    await settle(500)
+    expect(fetchSpots.mock.calls.every((c) => c[0].stateBorder === 'include')).toBe(true)
+    fetchSpots.mockClear()
+    rerender({ s: { ...state, stateBorder: 'exclude' } })
+    await settle(500)
+    const calls = fetchSpots.mock.calls.map((c) => c[0])
+    expect(calls.filter((p) => p.limit === 25)).toHaveLength(1) // new key: refetched
+    expect(calls.filter((p) => p.limit === 3).length).toBeGreaterThan(0) // dots refetched too
+    expect(calls.every((p) => p.stateBorder === 'exclude')).toBe(true)
   })
 
   it('leaves headroom under the API rate limit, finishing the rest a minute later', async () => {

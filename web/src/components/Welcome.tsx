@@ -27,6 +27,7 @@ export function Welcome({ headingRef, notice, waking, onPick, onLocate, onLocate
         <SearchBox onPick={onPick} />
         <LocateButton onLocate={onLocate} onError={onLocateError} />
       </div>
+      <p className="welcome-coverage">We currently cover southeast Michigan and the SF Bay Area.</p>
       {waking && (
         <p className="app-notice" role="status">
           Waking up the stargazing engine…

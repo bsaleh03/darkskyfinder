@@ -11,6 +11,7 @@ const base: AppState = {
   sort: 'relevant',
   access: 'all',
   border: 'include',
+  stateBorder: 'include',
   glow: true,
   spot: null,
 }
@@ -59,60 +60,86 @@ describe('Controls', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('sort and access emit patches', async () => {
+  it('sort emits patches; access is no longer a segmented control', async () => {
     const onChange = setup()
     const user = userEvent.setup()
     await user.click(screen.getByRole('radio', { name: 'Closest' }))
     expect(onChange).toHaveBeenLastCalledWith({ sort: 'closest' })
     await user.click(screen.getByRole('radio', { name: 'Best view' }))
     expect(onChange).toHaveBeenLastCalledWith({ sort: 'best_view' })
-    await user.click(screen.getByRole('radio', { name: 'Likely open' }))
-    expect(onChange).toHaveBeenLastCalledWith({ access: 'likely' })
     expect(screen.getByRole('radio', { name: 'Relevant' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByRole('radiogroup', { name: 'Access' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Likely open' })).toBeNull()
   })
 
-  it('verified option hidden unless showVerified', () => {
-    const { unmount } = render(
-      <Controls state={base} metro="se_mi" showVerified={false} onChange={vi.fn()} />,
-    )
-    expect(screen.queryByRole('radio', { name: 'Verified only' })).toBeNull()
-    unmount()
-    render(<Controls state={base} metro="se_mi" showVerified onChange={vi.fn()} />)
-    expect(screen.getByRole('radio', { name: 'Verified only' })).toBeInTheDocument()
-  })
-
-  it('Canada switch hidden behind More filters in se_mi and maps to border', async () => {
+  it('More filters holds the three switches in se_mi with the right state and patches', async () => {
     const onChange = setup()
     const user = userEvent.setup()
-    expect(screen.queryByRole('switch', { name: 'Include Canada' })).toBeNull()
+    expect(screen.queryByRole('switch')).toBeNull()
     const more = screen.getByRole('button', { name: 'More filters' })
     expect(more).toHaveAttribute('aria-expanded', 'false')
     await user.click(more)
     expect(more).toHaveAttribute('aria-expanded', 'true')
-    const sw = screen.getByRole('switch', { name: 'Include Canada' })
-    expect(more.getAttribute('aria-controls')).toBe(sw.closest('[id]')?.id)
-    expect(sw).toHaveAttribute('aria-checked', 'true')
-    await user.click(sw)
+    const likely = screen.getByRole('switch', { name: 'Likely open' })
+    const country = screen.getByRole('switch', { name: 'Crosses country border' })
+    const state = screen.getByRole('switch', { name: 'Crosses state border' })
+    expect(more.getAttribute('aria-controls')).toBe(likely.closest('[id]')?.id)
+    expect(likely).toHaveAttribute('aria-checked', 'false')
+    expect(country).toHaveAttribute('aria-checked', 'true')
+    expect(state).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByRole('switch', { name: 'Verified only' })).toBeNull()
+    await user.click(likely)
+    expect(onChange).toHaveBeenLastCalledWith({ access: 'likely' })
+    await user.click(country)
     expect(onChange).toHaveBeenLastCalledWith({ border: 'exclude' })
+    await user.click(state)
+    expect(onChange).toHaveBeenLastCalledWith({ stateBorder: 'exclude' })
     await user.click(more)
-    expect(screen.queryByRole('switch', { name: 'Include Canada' })).toBeNull()
+    expect(screen.queryByRole('switch')).toBeNull()
   })
 
-  it('no More filters outside se_mi; active count shown when Canada excluded', async () => {
-    const { unmount } = render(
-      <Controls state={base} metro="bay_area" showVerified={false} onChange={vi.fn()} />,
-    )
-    expect(screen.queryByRole('button', { name: /More filters/ })).toBeNull()
-    expect(screen.queryByRole('switch')).toBeNull()
+  it('switches reflect non-default state, count them, and toggle back', async () => {
+    const onChange = setup({ access: 'likely', border: 'exclude', stateBorder: 'exclude' })
+    const user = userEvent.setup()
+    const more = screen.getByRole('button', { name: 'More filters (3 on)' })
+    await user.click(more)
+    const likely = screen.getByRole('switch', { name: 'Likely open' })
+    expect(likely).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: 'Crosses country border' })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('switch', { name: 'Crosses state border' })).toHaveAttribute('aria-checked', 'false')
+    await user.click(likely)
+    expect(onChange).toHaveBeenLastCalledWith({ access: 'all' })
+    await user.click(screen.getByRole('switch', { name: 'Crosses country border' }))
+    expect(onChange).toHaveBeenLastCalledWith({ border: 'include' })
+    await user.click(screen.getByRole('switch', { name: 'Crosses state border' }))
+    expect(onChange).toHaveBeenLastCalledWith({ stateBorder: 'include' })
+  })
+
+  it('outside se_mi More filters has only Likely open', async () => {
+    setup({}, 'bay_area')
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'More filters' }))
+    expect(screen.getByRole('switch', { name: 'Likely open' })).toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: 'Crosses country border' })).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Crosses state border' })).toBeNull()
+  })
+
+  it('Verified only switch appears only with showVerified', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Controls state={base} metro="se_mi" showVerified={false} onChange={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'More filters' }))
+    expect(screen.queryByRole('switch', { name: 'Verified only' })).toBeNull()
     unmount()
     const onChange = vi.fn()
-    render(<Controls state={{ ...base, border: 'exclude' }} metro="se_mi" showVerified={false} onChange={onChange} />)
-    const more = screen.getByRole('button', { name: 'More filters (1 on)' })
-    await userEvent.setup().click(more)
-    const sw = screen.getByRole('switch', { name: 'Include Canada' })
-    expect(sw).toHaveAttribute('aria-checked', 'false')
-    await userEvent.setup().click(sw)
-    expect(onChange).toHaveBeenLastCalledWith({ border: 'include' })
+    render(<Controls state={{ ...base, access: 'verified' }} metro="se_mi" showVerified onChange={onChange} />)
+    await user.click(screen.getByRole('button', { name: 'More filters (1 on)' }))
+    const v = screen.getByRole('switch', { name: 'Verified only' })
+    expect(v).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: 'Likely open' })).toHaveAttribute('aria-checked', 'false')
+    await user.click(v)
+    expect(onChange).toHaveBeenLastCalledWith({ access: 'all' })
+    await user.click(screen.getByRole('switch', { name: 'Likely open' }))
+    expect(onChange).toHaveBeenLastCalledWith({ access: 'likely' })
   })
 
   it('segmented arrow keys move selection and focus', async () => {
@@ -134,20 +161,6 @@ describe('Controls', () => {
     expect(onChange).toHaveBeenLastCalledWith({ sort: 'relevant' })
     await user.keyboard('{ArrowUp}')
     expect(onChange).toHaveBeenLastCalledWith({ sort: 'best_view' })
-    screen.getByRole('radio', { name: 'All' }).focus()
-    await user.keyboard('{ArrowRight}')
-    expect(onChange).toHaveBeenLastCalledWith({ access: 'likely' })
-    expect(screen.getByRole('radio', { name: 'Likely open' })).toHaveFocus()
-  })
-
-  it('access group stays tabbable when value is hidden', () => {
-    setup({ access: 'verified' }, 'se_mi', false)
-    const group = screen.getByRole('radiogroup', { name: 'Access' })
-    const tabbable = Array.from(group.querySelectorAll('[role="radio"]')).filter(
-      (b) => (b as HTMLElement).tabIndex === 0,
-    )
-    expect(tabbable).toHaveLength(1)
-    expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('tabindex', '0')
   })
 
   it('slider clamps edge values', () => {

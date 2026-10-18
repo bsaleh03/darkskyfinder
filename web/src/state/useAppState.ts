@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { AccessKey, BorderKey, SortKey } from '../api/types'
+import type { AccessKey, BorderKey, SortKey, StateBorderKey } from '../api/types'
 
 export type AppState = {
   start: { lat: number; lon: number } | null
@@ -8,6 +8,7 @@ export type AppState = {
   sort: SortKey
   access: AccessKey
   border: BorderKey
+  stateBorder: StateBorderKey
   glow: boolean
   spot: string | null
 }
@@ -16,6 +17,7 @@ const DEFAULT_DRIVE = 90
 const SORTS: SortKey[] = ['relevant', 'closest', 'best_view']
 const ACCESSES: AccessKey[] = ['all', 'likely', 'verified']
 const BORDERS: BorderKey[] = ['include', 'exclude']
+const STATE_BORDERS: StateBorderKey[] = ['include', 'exclude']
 
 function parseNumber(raw: string | null): number | null {
   if (raw === null || raw.trim() === '') return null
@@ -56,6 +58,7 @@ export function parseState(search: string): AppState {
     sort: pick(p.get('sort'), SORTS, 'relevant'),
     access: pick(p.get('access'), ACCESSES, 'all'),
     border: pick(p.get('border'), BORDERS, 'include'),
+    stateBorder: pick(p.get('state_border'), STATE_BORDERS, 'include'),
     glow: p.get('glow') !== '0',
     spot: p.get('spot') || null,
   }
@@ -72,6 +75,7 @@ export function serializeState(s: AppState): string {
   if (s.sort !== 'relevant') p.set('sort', s.sort)
   if (s.access !== 'all') p.set('access', s.access)
   if (s.border !== 'include') p.set('border', s.border)
+  if (s.stateBorder !== 'include') p.set('state_border', s.stateBorder)
   if (!s.glow) p.set('glow', '0')
   if (s.spot) p.set('spot', s.spot)
   return p.toString()

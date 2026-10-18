@@ -23,6 +23,7 @@ const spot = (over: Partial<Spot> = {}): Spot => ({
   area: 'Oakland County',
   country: 'US',
   crosses_border: false,
+  crosses_state: false,
   recommended: false,
   sources: [],
   category: 'park',
@@ -70,6 +71,14 @@ describe('SpotCard', () => {
     expect(screen.getByText('45 min')).toBeTruthy()
     expect(screen.getByText('vivid')).toBeTruthy()
     expect(screen.getByRole('button', { expanded: false })).toBeTruthy()
+  })
+
+  it('badge: crosses state border only when crosses_state', () => {
+    const { unmount } = show(spot({ crosses_state: false }))
+    expect(screen.queryByText('Crosses state border')).toBeNull()
+    unmount()
+    show(spot({ crosses_state: true }))
+    expect(screen.getByText('Crosses state border')).toBeTruthy()
   })
 
   it('estimated drive prefixed with ≈', () => {

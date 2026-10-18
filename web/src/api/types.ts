@@ -59,6 +59,7 @@ export interface Spot {
   area: string | null
   country: string | null
   crosses_border: boolean
+  crosses_state: boolean
   recommended: boolean
   sources: { name: string; url: string }[]
   category: string
@@ -104,6 +105,7 @@ export interface SpotsResponse {
 export type SortKey = 'relevant' | 'closest' | 'best_view'
 export type AccessKey = 'all' | 'likely' | 'verified'
 export type BorderKey = 'include' | 'exclude'
+export type StateBorderKey = 'include' | 'exclude'
 
 export interface SpotsParams {
   lat: number
@@ -114,5 +116,6 @@ export interface SpotsParams {
   sort?: SortKey
   access: AccessKey
   border: BorderKey
+  stateBorder: StateBorderKey
   limit: number
 }

@@ -1,5 +1,5 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
-import type { AccessKey, SortKey } from '../api/types'
+import type { SortKey } from '../api/types'
 import type { AppState } from '../state/useAppState'
 import './controls.css'
 import './ControlsPanel.css'
@@ -63,6 +63,14 @@ function Segmented<T extends string>({ label, value, options, onSelect }: SegPro
   )
 }
 
+function Switch({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }): ReactNode {
+  return (
+    <button type="button" role="switch" aria-checked={on} className="ctl-btn controls-switch" onClick={onToggle}>
+      {label}
+    </button>
+  )
+}
+
 const SORTS: { value: SortKey; label: string }[] = [
   { value: 'relevant', label: 'Relevant' },
   { value: 'closest', label: 'Closest' },
@@ -96,12 +104,11 @@ export function Controls({ state, metro, showVerified, onChange }: Props) {
   // Rarely used filters live behind a disclosure; the count keeps a non-default one from going unnoticed.
   const [moreOpen, setMoreOpen] = useState(false)
   const moreId = useId()
-  const moreActive = state.border === 'exclude' ? 1 : 0
-  const accessOptions: { value: AccessKey; label: string }[] = [
-    { value: 'all', label: 'All' },
-    { value: 'likely', label: 'Likely open' },
-    ...(showVerified ? [{ value: 'verified' as AccessKey, label: 'Verified only' }] : []),
-  ]
+  const seMi = metro === 'se_mi'
+  const moreActive =
+    (state.access !== 'all' ? 1 : 0) +
+    (seMi && state.border === 'exclude' ? 1 : 0) +
+    (seMi && state.stateBorder === 'exclude' ? 1 : 0)
   return (
     <div className="controls">
       <label className="controls-row">
@@ -124,37 +131,44 @@ export function Controls({ state, metro, showVerified, onChange }: Props) {
         />
       </label>
       <Segmented label="Sort by" value={state.sort} options={SORTS} onSelect={(sort) => onChange({ sort })} />
-      <Segmented
-        label="Access"
-        value={state.access}
-        options={accessOptions}
-        onSelect={(access) => onChange({ access })}
-      />
-      {metro === 'se_mi' && (
-        <>
-          <button
-            type="button"
-            aria-expanded={moreOpen}
-            aria-controls={moreId}
-            className="ctl-btn controls-more"
-            onClick={() => setMoreOpen((o) => !o)}
-          >
-            More filters{moreActive > 0 ? ` (${moreActive} on)` : ''}
-          </button>
-          {moreOpen && (
-            <div id={moreId} className="controls-more-panel">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={state.border === 'include'}
-                className="ctl-btn controls-switch"
-                onClick={() => onChange({ border: state.border === 'include' ? 'exclude' : 'include' })}
-              >
-                Include Canada
-              </button>
-            </div>
+      <button
+        type="button"
+        aria-expanded={moreOpen}
+        aria-controls={moreId}
+        className="ctl-btn controls-more"
+        onClick={() => setMoreOpen((o) => !o)}
+      >
+        More filters{moreActive > 0 ? ` (${moreActive} on)` : ''}
+      </button>
+      {moreOpen && (
+        <div id={moreId} className="controls-more-panel">
+          <Switch
+            label="Likely open"
+            on={state.access === 'likely'}
+            onToggle={() => onChange({ access: state.access === 'likely' ? 'all' : 'likely' })}
+          />
+          {showVerified && (
+            <Switch
+              label="Verified only"
+              on={state.access === 'verified'}
+              onToggle={() => onChange({ access: state.access === 'verified' ? 'all' : 'verified' })}
+            />
           )}
-        </>
+          {seMi && (
+            <>
+              <Switch
+                label="Crosses country border"
+                on={state.border === 'include'}
+                onToggle={() => onChange({ border: state.border === 'include' ? 'exclude' : 'include' })}
+              />
+              <Switch
+                label="Crosses state border"
+                on={state.stateBorder === 'include'}
+                onToggle={() => onChange({ stateBorder: state.stateBorder === 'include' ? 'exclude' : 'include' })}
+              />
+            </>
+          )}
+        </div>
       )}
     </div>
   )

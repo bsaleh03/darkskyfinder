@@ -152,8 +152,8 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   expect(await cards.count()).toBeGreaterThanOrEqual(3)
   await expect(page).toHaveURL(/lat=42\.5072679&lon=-83\.15047897440644/)
   await expect(page.getByRole('button', { name: 'Royal Oak', exact: true })).toBeVisible() // start chip in the TopBar
-  // Include Canada sits behind the collapsed More filters disclosure.
-  await expect(page.getByRole('switch', { name: 'Include Canada' })).toHaveCount(0)
+  // The filter switches sit behind the collapsed More filters disclosure.
+  await expect(page.getByRole('switch', { name: 'Crosses country border' })).toHaveCount(0)
 
   // The map is the pre-rendered se_mi picture (the fixture manifest lists only the 1/4 width, 874 px).
   const map = page.locator('.static-map')
@@ -224,14 +224,14 @@ test('search, pick a start, explore nights, filters and red mode', async ({ page
   await page.screenshot({ path: testInfo.outputPath('main-red-full.png'), fullPage: true })
   await expect(page).toHaveScreenshot('main-red.png')
 
-  // Include Canada off refetches with border=exclude.
+  // Crosses country border off refetches with border=exclude.
   const borderReq = page.waitForRequest(spotsRequest((q) => q.get('border') === 'exclude'))
   await page.getByRole('button', { name: 'More filters' }).click()
-  await expect(page.getByRole('switch', { name: 'Include Canada' })).toHaveAttribute('aria-checked', 'true')
-  await page.getByRole('switch', { name: 'Include Canada' }).click()
+  await expect(page.getByRole('switch', { name: 'Crosses country border' })).toHaveAttribute('aria-checked', 'true')
+  await page.getByRole('switch', { name: 'Crosses country border' }).click()
   await borderReq
   await expect(page.getByRole('button', { name: 'More filters (1 on)' })).toHaveAttribute('aria-expanded', 'true')
-  await expect(page.getByRole('switch', { name: 'Include Canada' })).toHaveAttribute('aria-checked', 'false')
+  await expect(page.getByRole('switch', { name: 'Crosses country border' })).toHaveAttribute('aria-checked', 'false')
   await expect(page).toHaveURL(/border=exclude/)
   await settle(page)
 

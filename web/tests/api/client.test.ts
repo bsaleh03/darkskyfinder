@@ -3,7 +3,7 @@ import { ApiError, errorMessage, fetchHealth, fetchRegions, fetchSearch, fetchSp
 import { config } from '../../src/config'
 import type { SpotsParams } from '../../src/api/types'
 
-const params: SpotsParams = { lat: 42.3, lon: -83.1, drive: 90, sort: 'relevant', access: 'all', border: 'include', limit: 25 }
+const params: SpotsParams = { lat: 42.3, lon: -83.1, drive: 90, sort: 'relevant', access: 'all', border: 'include', stateBorder: 'exclude', limit: 25 }
 
 function mockFetch(status: number, body: unknown) {
   const f = vi.fn().mockImplementation(async () =>
@@ -33,6 +33,7 @@ describe('api client', () => {
     expect(url.searchParams.get('sort')).toBe('relevant')
     expect(url.searchParams.get('access')).toBe('all')
     expect(url.searchParams.get('border')).toBe('include')
+    expect(url.searchParams.get('state_border')).toBe('exclude')
     expect(url.searchParams.get('limit')).toBe('25')
     expect(url.searchParams.get('lat')).toBe('42.3')
     expect(url.searchParams.has('night')).toBe(false)

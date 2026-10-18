@@ -11,6 +11,7 @@ describe('parseState / serializeState', () => {
       sort: 'best_view' as const,
       access: 'likely' as const,
       border: 'exclude' as const,
+      stateBorder: 'exclude' as const,
       glow: false,
       spot: 'abc123',
     }
@@ -25,6 +26,7 @@ describe('parseState / serializeState', () => {
       sort: 'relevant',
       access: 'all',
       border: 'include',
+      stateBorder: 'include',
       glow: true,
       spot: null,
     })
@@ -40,6 +42,9 @@ describe('parseState / serializeState', () => {
     expect(parseState('?access=weird').access).toBe('all')
     expect(parseState('?access=verified').access).toBe('verified')
     expect(parseState('?border=weird').border).toBe('include')
+    expect(parseState('?state_border=weird').stateBorder).toBe('include')
+    expect(parseState('?state_border=exclude').stateBorder).toBe('exclude')
+    expect(serializeState(parseState('?state_border=exclude'))).toBe('state_border=exclude')
     expect(parseState('?lat=200&lon=10').start).toBeNull()
     expect(parseState('?lat=10&lon=-181').start).toBeNull()
     expect(parseState('?lat=10').start).toBeNull()

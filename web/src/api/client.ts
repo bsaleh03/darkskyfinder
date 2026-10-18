@@ -79,6 +79,7 @@ export function fetchSpots(p: SpotsParams, signal?: AbortSignal): Promise<SpotsR
     max_drive: String(p.drive),
     access: p.access,
     border: p.border,
+    state_border: p.stateBorder,
     limit: String(p.limit),
   })
   if (p.sort) q.set('sort', p.sort)

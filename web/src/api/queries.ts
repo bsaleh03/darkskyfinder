@@ -84,17 +84,18 @@ function spotsParams(s: AppState): SpotsParams {
     sort: s.sort,
     access: s.access,
     border: s.border,
+    stateBorder: s.stateBorder,
     limit: 25,
   }
 }
 
 /** The night verdict depends on these only (not on sort or limit). */
-const dotKey = (s: AppState, night: string) => ['dot', s.start, night, s.drive, s.access, s.border]
+const dotKey = (s: AppState, night: string) => ['dot', s.start, night, s.drive, s.access, s.border, s.stateBorder]
 
 function useSpotsQuery(s: AppState) {
   const qc = useQueryClient()
   return useQuery<SpotsResponse, ApiError>({
-    queryKey: ['spots', s.start, s.night, s.drive, s.sort, s.access, s.border],
+    queryKey: ['spots', s.start, s.night, s.drive, s.sort, s.access, s.border, s.stateBorder],
     queryFn: async ({ signal }) => {
       noteSpotsCall()
       const r = await fetchSpots(spotsParams(s), signal)

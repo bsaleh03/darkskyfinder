@@ -29,7 +29,10 @@ export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezon
         <span className="spot-main">
           <span className="spot-name">{spot.display_name}</span>
           {spot.area && <span className="spot-area">{spot.area}</span>}
-          <Badges darkSky={spot.dark_sky_place} recommended={spot.recommended} crossesBorder={spot.crosses_border} />
+          <Badges
+            darkSky={spot.dark_sky_place} recommended={spot.recommended} crossesBorder={spot.crosses_border}
+            crossesState={spot.crosses_state}
+          />
           {spot.unavailable ? (
             <span className="spot-unavailable">
               {spot.unavailable_reason ? `Not available right now · ${spot.unavailable_reason}` : 'Not available right now'}

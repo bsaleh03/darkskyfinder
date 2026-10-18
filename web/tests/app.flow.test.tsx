@@ -58,6 +58,7 @@ const spot = (over: Partial<Spot> = {}): Spot => ({
   area: 'Oakland County',
   country: 'US',
   crosses_border: false,
+  crosses_state: false,
   recommended: false,
   sources: [],
   category: 'park',
@@ -141,6 +142,7 @@ describe('App flow', () => {
   it('welcome when no start', async () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: "Where's the closest dark sky tonight?" })).toBeInTheDocument()
+    expect(screen.getByText('We currently cover southeast Michigan and the SF Bay Area.')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Search for a place' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Use my location' })).toBeInTheDocument()
     await waitFor(() => expect(fetchRegions).toHaveBeenCalled())
@@ -421,7 +423,8 @@ describe('App flow', () => {
       // Sort does not change any night's verdict: no new dot queries, no dot requests.
       expect(dotQueries()).toBe(dotQueriesBeforeSort)
       expect(dots()).toBe(dotsBeforeSort)
-      fireEvent.click(screen.getByRole('radio', { name: 'Likely open' }))
+      fireEvent.click(screen.getByRole('button', { name: 'More filters' }))
+      fireEvent.click(screen.getByRole('switch', { name: 'Likely open' }))
       await waitFor(() => expect(fetchSpots.mock.calls.filter((c) => c[0].access === 'likely' && c[0].limit === 25)).toHaveLength(1))
       await pause()
       expect(total()).toBeLessThanOrEqual(14)
