@@ -64,6 +64,7 @@ const spot = (over: Partial<Spot> = {}): Spot => ({
   category: 'park',
   lon: -83.5,
   lat: 42.5,
+  entry: null,
   sqm: 21.4,
   bortle: 3,
   sky_label: 'Milky Way vivid',

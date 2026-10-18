@@ -29,6 +29,7 @@ const spot = (over: Partial<Spot> = {}): Spot => ({
   category: 'park',
   lon: -83.5,
   lat: 42.5,
+  entry: null,
   sqm: 21.4,
   bortle: 3,
   sky_label: 'vivid',
@@ -160,6 +161,25 @@ describe('SpotCard', () => {
     const text = container.textContent ?? ''
     expect(text).not.toMatch(/null|undefined|NaN/)
     expect(screen.getByRole('link', { name: /Directions/ })).toBeTruthy()
+  })
+})
+
+describe('directions target', () => {
+  it('uses the entrance when present', () => {
+    show(spot({ entry: { lon: -83.6, lat: 42.6 } }), { expanded: true })
+    const href = screen.getByRole('link', { name: /Directions/ }).getAttribute('href') ?? ''
+    expect(href).toContain('42.6,-83.6')
+    expect(href).not.toContain('42.5,-83.5')
+  })
+  it('falls back to the spot point when entry is null or missing', () => {
+    show(spot({ entry: null }), { expanded: true })
+    expect(screen.getByRole('link', { name: /Directions/ }).getAttribute('href')).toContain('42.5,-83.5')
+  })
+  it('treats a missing entry field as null', () => {
+    const s = spot()
+    delete (s as Partial<Spot>).entry
+    show(s, { expanded: true })
+    expect(screen.getByRole('link', { name: /Directions/ }).getAttribute('href')).toContain('42.5,-83.5')
   })
 })
 

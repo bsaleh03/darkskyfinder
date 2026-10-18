@@ -77,7 +77,7 @@ export function SpotCard({ spot, homeSqm, homeLabel, expanded, onToggle, timezon
             <SourcesList sources={spot.sources} />
             <Amenities amenities={spot.amenities} />
             <ExpertNumbers spot={spot} />
-            <DirectionsButton lat={spot.lat} lon={spot.lon} />
+            <DirectionsButton lat={spot.lat} lon={spot.lon} entry={spot.entry} />
           </>
         )}
       </div>

@@ -4,11 +4,20 @@ export function directionsUrl(lat: number, lon: number, ua: string, touchPoints 
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`
 }
 
-export function DirectionsButton({ lat, lon }: { lat: number; lon: number }) {
+export function DirectionsButton({
+  lat,
+  lon,
+  entry,
+}: {
+  lat: number
+  lon: number
+  entry?: { lon: number; lat: number } | null
+}) {
+  const target = entry ?? { lat, lon }
   const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
   const touchPoints = typeof navigator === 'undefined' ? 0 : navigator.maxTouchPoints
   return (
-    <a className="directions-button" href={directionsUrl(lat, lon, ua, touchPoints)} target="_blank" rel="noopener noreferrer">
+    <a className="directions-button" href={directionsUrl(target.lat, target.lon, ua, touchPoints)} target="_blank" rel="noopener noreferrer">
       Directions
     </a>
   )
