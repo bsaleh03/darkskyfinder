@@ -14,7 +14,12 @@ const MANIFEST = vi.hoisted(() => ({
   bounds: [-86.9, 41.65, -82.4, 45.9] as [number, number, number, number],
   aspect: 1.3089,
   widths: [874, 1748, 3496],
-  files: { base: 'base_{w}.webp', base_red: 'base_red_{w}.webp', glow: 'glow_{w}.webp', glow_red: 'glow_red_{w}.webp' },
+  files: {
+    base: 'base_{w}.webp',
+    base_red: 'base_red_{w}.webp',
+    base_glow: 'base_glow_{w}.webp',
+    base_glow_red: 'base_glow_red_{w}.webp',
+  },
   labels: 'labels.json',
 }))
 vi.mock('../src/map/useMapManifest', async (orig) => ({
@@ -193,7 +198,7 @@ describe('App flow', () => {
     expect(screen.getByRole('button', { name: 'Dropped pin' })).toBeInTheDocument()
     // The map shows the region picture, the start and one pin button per spot.
     const map = within(mapEl()!)
-    expect(mapImages()[0]).toMatch(/\/tiles\/maps\/se_mi\/base_\d+\.webp$/)
+    expect(mapImages()[0]).toMatch(/\/tiles\/maps\/se_mi\/base_glow_\d+\.webp$/)
     expect(map.getByRole('img', { name: 'Your start' })).toBeInTheDocument()
     expect(['Closed Park', 'Lake Park Beach', 'Hidden Lake'].map((n) => map.getByRole('button', { name: n }))).toHaveLength(3)
     expect(screen.getByRole('group', { name: 'Choose a night' })).toBeInTheDocument()
@@ -347,15 +352,15 @@ describe('App flow', () => {
     fetchSpots.mockResolvedValue(response())
     render(<App />)
     await screen.findByText('Great night for stars.')
-    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/), expect.stringMatching(/\/glow_\d+\.webp$/)])
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_glow_\d+\.webp$/)])
     const before = window.history.length
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
     expect(document.documentElement.dataset.red).toBe('true')
-    expect(mapImages()).toEqual([expect.stringMatching(/\/base_red_\d+\.webp$/), expect.stringMatching(/\/glow_red_\d+\.webp$/)])
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_glow_red_\d+\.webp$/)])
     expect(window.location.search).toBe('?lat=42.49&lon=-83.14')
     expect(window.history.length).toBe(before)
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
-    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/), expect.stringMatching(/\/glow_\d+\.webp$/)])
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_glow_\d+\.webp$/)])
   })
 
   it('the glow toggle on the map sets glow=0 in the URL', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapLevels, mapTileUrl, parseManifest } from '../../src/map/useMapManifest'
+import { hasGlowComposite, mapFileUrl, mapLevels, mapTileUrl, parseManifest } from '../../src/map/useMapManifest'
 
 const V1 = {
   metro: 'se_mi',
@@ -20,6 +20,51 @@ const V2 = {
     base_red: 'base_red_L{l}_{c}_{r}.webp',
   },
 }
+/** v3: the glow drawn into the pictures (base_glow / base_glow_red), no separate glow overlay, tiles for all four. */
+const V3 = {
+  ...V1,
+  files: {
+    base: 'base_{w}.webp',
+    base_red: 'base_red_{w}.webp',
+    base_glow: 'base_glow_{w}.webp',
+    base_glow_red: 'base_glow_red_{w}.webp',
+  },
+  levels: V2.levels,
+  tiles: {
+    base: 'base_L{l}_{c}_{r}.webp',
+    base_red: 'base_red_L{l}_{c}_{r}.webp',
+    base_glow: 'base_glow_L{l}_{c}_{r}.webp',
+    base_glow_red: 'base_glow_red_L{l}_{c}_{r}.webp',
+  },
+}
+
+describe('parseManifest (v3, glow composites)', () => {
+  it('accepts a v3 manifest: base, base_red and the glow composites, with no glow overlay', () => {
+    const m = parseManifest(V3, 'se_mi')
+    expect(hasGlowComposite(m)).toBe(true)
+    expect(mapLevels(m)).toEqual(V3.levels)
+    expect(mapFileUrl(m, 'base_glow_red', 874)).toMatch(/\/maps\/se_mi\/base_glow_red_874\.webp$/)
+    expect(mapTileUrl(m, 'base_glow', 1, 1, 0)).toMatch(/\/maps\/se_mi\/base_glow_L1_1_0\.webp$/)
+  })
+
+  it('older manifests (separate glow overlay) still parse and have no composites', () => {
+    expect(hasGlowComposite(parseManifest(V1, 'se_mi'))).toBe(false)
+    expect(hasGlowComposite(parseManifest(V2, 'se_mi'))).toBe(false)
+  })
+
+  it('needs a glow source: the composite pair or the overlay pair; a half pair is rejected', () => {
+    const { base_glow: _g, base_glow_red: _gr, ...plain } = V3.files
+    expect(() => parseManifest({ ...V3, files: plain }, 'se_mi')).toThrow()
+    expect(() => parseManifest({ ...V3, files: { ...plain, base_glow: 'base_glow_{w}.webp' } }, 'se_mi')).toThrow()
+    expect(() => parseManifest({ ...V3, files: { ...V3.files, base_red: undefined } }, 'se_mi')).toThrow()
+  })
+
+  it('a v3 manifest with levels above 0 needs composite tile templates too', () => {
+    const { base_glow: _g, base_glow_red: _gr, ...plainTiles } = V3.tiles
+    expect(() => parseManifest({ ...V3, tiles: plainTiles }, 'se_mi')).toThrow()
+    expect(() => parseManifest({ ...V3, tiles: { ...V3.tiles, base_glow_red: 7 } }, 'se_mi')).toThrow()
+  })
+})
 
 describe('parseManifest', () => {
   it('accepts a v2 manifest with its levels and tile templates', () => {
