@@ -291,6 +291,16 @@ describe('useSearch', () => {
     expect(fetchSearch.mock.calls[0][0]).toBe('roya')
   })
 
+  it('waits longer for a street address (starts with a number), so typing it costs fewer lookups', async () => {
+    fetchSearch.mockResolvedValue([])
+    const { rerender } = renderHook(({ q }) => useSearch(q), { wrapper: wrapper(), initialProps: { q: '' } })
+    rerender({ q: '5500 Telegraph' })
+    await tick(300)
+    expect(fetchSearch).not.toHaveBeenCalled()
+    await tick(400)
+    expect(fetchSearch).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores out-of-order search responses', async () => {
     type Hits = Awaited<ReturnType<typeof client.fetchSearch>>
     const hit = (name: string): Hits => [{ name, kind: 'city', lat: 1, lon: 2, metro: 'se_mi', source: 'overture' }]

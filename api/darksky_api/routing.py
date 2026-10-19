@@ -43,7 +43,7 @@ class RoutingClient:
                  clock: Callable[[], float] = time.monotonic) -> None:
         self._http = http
         self._key = api_key
-        self._cache = cache or TTLCache(config.ROUTE_CACHE_TTL_S, maxsize=config.ROUTE_CACHE_MAX)
+        self._cache = TTLCache(config.ROUTE_CACHE_TTL_S, maxsize=config.ROUTE_CACHE_MAX) if cache is None else cache
         self._budget = budget
         self._today = today
         self._clock = clock

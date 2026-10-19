@@ -7,7 +7,7 @@ def test_token_map_is_the_agreed_mapping():
     assert TOKEN_MAP == {
         "street": "st", "avenue": "ave", "road": "rd", "drive": "dr", "boulevard": "blvd", "lane": "ln",
         "court": "ct", "place": "pl", "circle": "cir", "terrace": "ter", "parkway": "pkwy", "highway": "hwy",
-        "trail": "trl",
+        "trail": "trl", "av": "ave", "wy": "way",
         "north": "n", "south": "s", "east": "e", "west": "w",
         "northeast": "ne", "northwest": "nw", "southeast": "se", "southwest": "sw",
     }
@@ -21,6 +21,8 @@ def test_token_map_is_the_agreed_mapping():
     ("Dr Carlton B Goodlett Pl", "dr carlton b goodlett pl"),
     ("  12 Mile   ROAD ", "12 mile rd"),
     ("Old_Mill-Trail", "old mill trl"),
+    ("Foothill AV", "foothill ave"),
+    ("Skyline WY", "skyline way"),
     ("", ""),
 ])
 def test_normalize(raw, norm):

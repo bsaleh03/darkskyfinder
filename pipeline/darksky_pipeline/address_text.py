@@ -11,7 +11,7 @@ import re
 STREET_TYPES = {
     "street": "st", "avenue": "ave", "road": "rd", "drive": "dr", "boulevard": "blvd", "lane": "ln",
     "court": "ct", "place": "pl", "circle": "cir", "terrace": "ter", "parkway": "pkwy", "highway": "hwy",
-    "trail": "trl",
+    "trail": "trl", "av": "ave", "wy": "way",
 }
 DIRECTIONS = {
     "north": "n", "south": "s", "east": "e", "west": "w",

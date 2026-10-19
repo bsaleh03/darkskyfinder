@@ -9,6 +9,8 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000]
 const WAKING_AFTER_MS = 3000
 const DOT_CONCURRENCY = 2
 const SEARCH_DEBOUNCE_MS = 250
+// A street address (starts with a house number) may reach the paid geocoder fallback: wait for a longer pause.
+const ADDRESS_DEBOUNCE_MS = 600
 // The API allows 20 /spots requests per minute per client. Background night-dot requests only go out
 // while fewer than DOT_BUDGET /spots requests were made in the last minute, keeping the rest for the
 // user's own changes; dots over budget wait for the window to free up.
@@ -234,7 +236,7 @@ export function useSearch(q: string): { hits: SearchHit[]; loading: boolean } {
       setDebounced(term)
       return
     }
-    const t = setTimeout(() => setDebounced(term), SEARCH_DEBOUNCE_MS)
+    const t = setTimeout(() => setDebounced(term), /^\d/.test(term) ? ADDRESS_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [term, enough])
   const settled = enough && debounced === term

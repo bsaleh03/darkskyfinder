@@ -45,7 +45,7 @@ def _parse(block: dict) -> dict[int, HourWeather]:
 class ForecastClient:
     def __init__(self, http: httpx.Client, cache: TTLCache | None = None) -> None:
         self._http = http
-        self._cache = cache or TTLCache(config.FORECAST_CACHE_TTL_S)
+        self._cache = TTLCache(config.FORECAST_CACHE_TTL_S) if cache is None else cache
 
     def get(self, cells: list[Cell], tz: str) -> dict[Cell, dict[int, HourWeather]]:
         result: dict[Cell, dict[int, HourWeather]] = {}

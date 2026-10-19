@@ -65,7 +65,7 @@ describe('SearchBox', () => {
     fetchSearch.mockResolvedValue([hit('150 Main St, Royal Oak', 'se_mi', { kind: 'address' })])
     renderBox()
     type('150 main')
-    await advance(400)
+    await advance(700)
     expect(screen.getByRole('option')).toHaveTextContent('address · Michigan')
     expect(screen.queryByText(ORS_ATTRIBUTION)).toBeNull()
   })
@@ -76,7 +76,7 @@ describe('SearchBox', () => {
     ])
     const onPick = renderBox()
     type('5500 telegraph rd')
-    await advance(400)
+    await advance(700)
     const note = screen.getByText(ORS_ATTRIBUTION)
     expect(screen.getByRole('listbox')).not.toContainElement(note) // not an option
     expect(screen.getAllByRole('option')).toHaveLength(1)

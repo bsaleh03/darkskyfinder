@@ -18,7 +18,8 @@ def test_same_module_as_pipeline():
 def test_mapping():
     assert TOKEN_MAP["street"] == "st" and TOKEN_MAP["avenue"] == "ave" and TOKEN_MAP["trail"] == "trl"
     assert TOKEN_MAP["northeast"] == "ne" and TOKEN_MAP["west"] == "w"
-    assert len(TOKEN_MAP) == 21
+    assert TOKEN_MAP["av"] == "ave" and TOKEN_MAP["wy"] == "way"
+    assert len(TOKEN_MAP) == 23
 
 
 def test_normalize_query_forms():

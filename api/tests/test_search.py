@@ -251,7 +251,21 @@ def test_no_fallback_for_non_address_queries(store, text):
 
 def test_fallback_needs_four_letters(store):
     geo = FakeGeocoder([])
-    search(store, "12 ab cd", geocoder=geo)
+    search(store, "12 ab cde", geocoder=geo)
+    assert len(geo.calls) == 1
+
+
+@pytest.mark.parametrize("text", ["5500 Telegraph Rd D", "5500 Telegraph Rd De"])
+def test_no_fallback_while_last_word_is_still_being_typed(store, text):
+    geo = FakeGeocoder([])
+    search(store, text, geocoder=geo)
+    assert geo.calls == []
+
+
+@pytest.mark.parametrize("text", ["5500 Telegraph Rd", "5500 Telegraph Rd Dea"])
+def test_fallback_once_last_word_is_a_street_type_or_three_letters(store, text):
+    geo = FakeGeocoder([])
+    search(store, text, geocoder=geo)
     assert len(geo.calls) == 1
 
 
