@@ -49,6 +49,13 @@ describe('api client', () => {
     await fetchSearch('ann', ac.signal)
     expect(f.mock.calls[0][1].signal).toBe(ac.signal)
     expect(new URL(f.mock.calls[0][0] as string).searchParams.get('q')).toBe('ann')
+    expect(new URL(f.mock.calls[0][0] as string).searchParams.has('geocode')).toBe(false)
+  })
+
+  it('an explicit search asks the API to geocode', async () => {
+    const f = mockFetch(200, [])
+    await fetchSearch('5500 telegraph rd', undefined, { geocode: true })
+    expect(new URL(f.mock.calls[0][0] as string).searchParams.get('geocode')).toBe('true')
   })
 
   it('fetches regions and health', async () => {

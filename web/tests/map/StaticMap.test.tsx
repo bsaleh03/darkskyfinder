@@ -605,7 +605,7 @@ describe('StaticMap', () => {
     renderMap()
     expect(
       screen.getByText(
-        'Overture Maps Foundation · © OpenStreetMap contributors · TomTom · ESA WorldCover · VIIRS VNL (EOG / Colorado School of Mines)',
+        'Overture Maps Foundation · © OpenStreetMap contributors · TomTom · ESA WorldCover · VIIRS VNL (EOG / Colorado School of Mines) · Drive times & address lookup: openrouteservice.org',
       ),
     ).toBeInTheDocument()
   })

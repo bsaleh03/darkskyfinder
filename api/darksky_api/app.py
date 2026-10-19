@@ -108,10 +108,11 @@ def create_app(store: DataStore, routing, forecast, settings: Settings,
 
     @app.get("/api/search", response_model=list[SearchHit])
     def search_route(request: Request, q: str = Query("", max_length=100), metro: str | None = None,
-                     limit: int = Query(8, ge=1, le=20)):
+                     limit: int = Query(8, ge=1, le=20), geocode: bool = False):
+        # Suggestions while typing use Overture only; an explicit search (geocode=true) may also ask the geocoder.
         if not search_limiter.allow(_client_ip(request, hops)):
             return _rate_limited()
-        return search(store, q, metro=metro, limit=limit, geocoder=geocoder)
+        return search(store, q, metro=metro, limit=limit, geocoder=geocoder if geocode else None)
 
     @app.get("/api/spots", response_model=SpotsResponse)
     def spots(request: Request,

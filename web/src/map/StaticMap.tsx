@@ -22,7 +22,7 @@ export interface StaticMapProps {
 }
 
 export const ATTRIBUTION =
-  'Overture Maps Foundation · © OpenStreetMap contributors · TomTom · ESA WorldCover · VIIRS VNL (EOG / Colorado School of Mines)'
+  'Overture Maps Foundation · © OpenStreetMap contributors · TomTom · ESA WorldCover · VIIRS VNL (EOG / Colorado School of Mines) · Drive times & address lookup: openrouteservice.org'
 const UNAVAILABLE = 'Map unavailable right now'
 
 /** Pins and the start are fitted into the view minus this inset (CSS px) on every side. */

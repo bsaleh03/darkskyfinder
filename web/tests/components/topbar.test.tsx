@@ -65,24 +65,24 @@ describe('SearchBox', () => {
     fetchSearch.mockResolvedValue([hit('150 Main St, Royal Oak', 'se_mi', { kind: 'address' })])
     renderBox()
     type('150 main')
-    await advance(700)
+    await advance(400)
     expect(screen.getByRole('option')).toHaveTextContent('address · Michigan')
     expect(screen.queryByText(ORS_ATTRIBUTION)).toBeNull()
   })
 
-  it('shows the openrouteservice attribution when a shown hit came from it', async () => {
-    fetchSearch.mockResolvedValue([
-      hit('5500 Telegraph Road, Dearborn Heights', 'se_mi', { kind: 'address', source: 'openrouteservice' }),
-    ])
-    const onPick = renderBox()
+  it('shows the openrouteservice attribution under the box while its result is the chosen start', async () => {
+    fetchSearch.mockImplementation(async (_q, _s, opts) =>
+      opts?.geocode ? [hit('5500 Telegraph Road, Dearborn Heights', 'se_mi', { kind: 'address', source: 'openrouteservice' })] : [],
+    )
+    renderBox()
     type('5500 telegraph rd')
-    await advance(700)
-    const note = screen.getByText(ORS_ATTRIBUTION)
-    expect(screen.getByRole('listbox')).not.toContainElement(note) // not an option
-    expect(screen.getAllByRole('option')).toHaveLength(1)
-    fireEvent.click(screen.getByRole('option'))
-    expect(onPick).toHaveBeenCalledOnce()
-    expect(screen.queryByText(ORS_ATTRIBUTION)).toBeNull() // closes with the list
+    await advance(400)
+    expect(screen.queryByText(ORS_ATTRIBUTION)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await advance(100)
+    expect(screen.getByText(ORS_ATTRIBUTION)).toBeInTheDocument()
+    type('5500 telegraph r') // editing: no longer that result
+    expect(screen.queryByText(ORS_ATTRIBUTION)).toBeNull()
   })
 
   it('search shows hits and picks with keyboard', async () => {
@@ -107,6 +107,50 @@ describe('SearchBox', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: 'Royal Oak' }))
     expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('the search button looks the text up (with the geocoder) and goes to the best match', async () => {
+    fetchSearch.mockImplementation(async (_q, _s, opts) =>
+      opts?.geocode ? [hit('5500 Telegraph Road, Dearborn Heights', 'se_mi', { kind: 'address', source: 'openrouteservice' })] : [],
+    )
+    const onPick = renderBox()
+    type('5500 telegraph rd dearborn heights')
+    await advance(400)
+    expect(fetchSearch.mock.calls.every((c) => !c[2]?.geocode)).toBe(true) // typing: suggestions only
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await advance(100)
+    expect(fetchSearch).toHaveBeenLastCalledWith('5500 telegraph rd dearborn heights', undefined, { geocode: true })
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: '5500 Telegraph Road, Dearborn Heights' }))
+    expect(screen.getByRole('combobox')).toHaveValue('5500 Telegraph Road, Dearborn Heights')
+  })
+
+  it('Enter with no suggestion highlighted searches; nothing found says so', async () => {
+    fetchSearch.mockResolvedValue([])
+    const onPick = renderBox()
+    type('99999 nowhere rd')
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' })
+    await advance(100)
+    expect(fetchSearch).toHaveBeenLastCalledWith('99999 nowhere rd', undefined, { geocode: true })
+    expect(onPick).not.toHaveBeenCalled()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Couldn’t find that place or address. Try a nearby town, or use your location.',
+    )
+    type('99999 nowhere r') // editing clears the message
+    expect(screen.queryByText(/Couldn’t find/)).toBeNull()
+  })
+
+  it('Enter with no suggestion highlighted picks the lookup result, not the first suggestion', async () => {
+    fetchSearch.mockImplementation(async (_q, _s, opts) =>
+      opts?.geocode ? [hit('16301 Michigan Avenue, Dearborn', 'se_mi', { kind: 'address' })] : [hit('Michigan Center')],
+    )
+    const onPick = renderBox()
+    type('16301 michigan ave dearborn')
+    await advance(400)
+    expect(screen.getByRole('option')).toHaveTextContent('Michigan Center')
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' })
+    await advance(100)
+    expect(onPick).toHaveBeenCalledTimes(1)
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: '16301 Michigan Avenue, Dearborn' }))
   })
 
   it('Escape closes the list', async () => {

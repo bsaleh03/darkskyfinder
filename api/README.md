@@ -33,7 +33,8 @@ Docs at `http://localhost:8000/docs`.
 
 Search hits carry `source: "overture" | "openrouteservice"`. A query starting with a house number
 ("1000 Woodward Ave Royal Oak") is matched against the Overture street/block index and interpolated; those
-`address` hits come first. If Overture has none, the ORS geocoder is asked (same `ORS_API_KEY`, separate
+`address` hits come first. Only an explicit search (`geocode=true`, sent when the user presses Enter or the
+search button; suggestions while typing never set it) may go further: if Overture has no address, the ORS geocoder is asked (same `ORS_API_KEY`, separate
 budget of 500 calls/day, 1-day cache) and only address results inside a metro are kept; any failure just
 means no address hits.
 

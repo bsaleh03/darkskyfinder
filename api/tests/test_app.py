@@ -48,7 +48,10 @@ def test_search_uses_geocoder_fallback(store):
                      "metro": "test", "source": "openrouteservice"}]
 
     app = create_app(store, FakeRouting(MINUTES), FakeForecast(), SETTINGS, geocoder=Geo(), today=fixed_today)
-    hits = TestClient(app).get("/api/search", params={"q": "5500 telegraph rd"}).json()
+    client = TestClient(app)
+    # Typing (suggestions) never reaches the geocoder; only an explicit search (geocode=true) does.
+    assert client.get("/api/search", params={"q": "5500 telegraph rd"}).json() == []
+    hits = client.get("/api/search", params={"q": "5500 telegraph rd", "geocode": "true"}).json()
     assert hits == [{"name": "5500 Telegraph Road, Testville", "kind": "address", "lat": 41.9, "lon": -84.1,
                      "metro": "test", "source": "openrouteservice"}]
 

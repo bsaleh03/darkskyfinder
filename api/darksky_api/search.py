@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Protocol
 
 from . import config
-from .address_text import STREET_TYPES, TOKEN_MAP, tokens as address_tokens
+from .address_text import TOKEN_MAP, tokens as address_tokens
 from .config import BBox
 from .data import DataStore
 from .routing import haversine_km
@@ -56,13 +56,6 @@ def parse_address(text: str) -> AddressQuery | None:
         return None
     label = m.group(1).lower()
     return AddressQuery(int(re.match(r"\d+", label).group()), label, toks, sum(c.isalpha() for c in m.group(2)))
-
-
-def _worth_geocoding(q: AddressQuery) -> bool:
-    """Address-like enough to spend an ORS call: enough letters, and the last word not still being typed (it has
-    3+ characters or is a whole street type like "rd"), so each keystroke pause doesn't cost a lookup."""
-    last = q.tokens[-1]
-    return q.letters >= config.GEOCODE_MIN_LETTERS and (len(last) >= 3 or last in STREET_TYPES.values())
 
 
 def _street_match(tokens: list[str]) -> str:
@@ -170,7 +163,7 @@ def search(store: DataStore, text: str, metro: str | None = None, limit: int = 8
     addr = parse_address(text)
     if addr is not None and keys:
         out = _addresses(store, keys, addr, limit)
-        if not out and geocoder is not None and _worth_geocoding(addr):
+        if not out and geocoder is not None and addr.letters >= config.GEOCODE_MIN_LETTERS:
             out = geocoder.search(text, {k: store.metros[k].info.bbox for k in keys})[:limit]
     if not tokens:
         return out

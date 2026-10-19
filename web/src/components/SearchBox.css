@@ -7,7 +7,7 @@
 .search-input {
   width: 100%;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 48px 0 14px; /* room for the search button */
   color: var(--ink);
   background: var(--glass);
   backdrop-filter: blur(10px);
@@ -74,4 +74,48 @@
 .search-meta {
   color: var(--muted);
   font-size: 0.8125rem;
+}
+
+/* Search button inside the input's right end: looks the text up (addresses too) and goes to the best match. */
+.search-go {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--muted);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-control);
+}
+
+.search-go:hover {
+  color: var(--ink);
+}
+
+.search-go:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.search-go:disabled {
+  cursor: progress;
+  opacity: 0.5;
+}
+
+.search-message,
+.search-attribution--below {
+  margin: 4px 0 0;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.search-attribution--below {
+  font-size: 0.75rem;
 }
