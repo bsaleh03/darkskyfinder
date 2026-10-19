@@ -1,6 +1,8 @@
 """Response models (documented in /docs; validate the service output shape)."""
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -19,6 +21,7 @@ class SearchHit(BaseModel):
     lat: float
     lon: float
     metro: str
+    source: Literal["overture", "openrouteservice"]
 
 
 class Health(BaseModel):

@@ -57,6 +57,37 @@ SEARCH_ROWS = [
 ]
 
 
+# Compact address index, same schema as the pipeline's search_index.build_search_index:
+# streets (id, normalized text, display) and blocks (street_id, lo, hi, lo point, hi point) in degrees.
+STREETS = [
+    (0, "main st testville mi 49999", "Main St, Testville"),
+    (1, "n main st hudson mi 49247", "N Main St, Hudson"),
+    (2, "lakeview rd testville mi 49999", "Lakeview Rd, Testville"),
+]
+BLOCKS = [
+    (0, 100, 198, 42.0, -84.05, 42.001, -84.052),
+    (0, 200, 250, 42.002, -84.053, 42.003, -84.054),
+    (1, 1000, 1090, 41.85, -84.35, 41.86, -84.35),
+    (2, 7, 7, 41.86, -84.25, 41.86, -84.25),
+]
+
+
+def write_address_tables(con: sqlite3.Connection, streets=STREETS, blocks=BLOCKS) -> None:
+    con.execute("CREATE VIRTUAL TABLE streets USING fts5(text, content='', detail=none, "
+                "tokenize='unicode61 remove_diacritics 2')")
+    con.execute("CREATE TABLE street_names (id INTEGER PRIMARY KEY, display TEXT NOT NULL)")
+    for sid, text, display in streets:
+        con.execute("INSERT INTO streets (rowid, text) VALUES (?, ?)", (sid, text))
+        con.execute("INSERT INTO street_names (id, display) VALUES (?, ?)", (sid, display))
+    con.execute("CREATE TABLE blocks (street_id INTEGER NOT NULL, lo INTEGER NOT NULL, hi INTEGER NOT NULL, "
+                "lat_lo INTEGER NOT NULL, lon_lo INTEGER NOT NULL, dlat_hi INTEGER NOT NULL, "
+                "dlon_hi INTEGER NOT NULL, PRIMARY KEY (street_id, lo)) WITHOUT ROWID")
+    e5 = lambda v: round(v * 1e5)  # noqa: E731
+    con.executemany("INSERT INTO blocks VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [(sid, lo, hi, e5(alo), e5(olo), e5(ahi) - e5(alo), e5(ohi) - e5(olo))
+                     for sid, lo, hi, alo, olo, ahi, ohi in blocks])
+
+
 def _write_grid(path: Path) -> None:
     fwd = Transformer.from_crs(4326, EPSG, always_xy=True)
     w, s, e, n = TEST_METRO.bbox
@@ -78,6 +109,7 @@ def _write_search(path: Path) -> None:
     con.execute("CREATE VIRTUAL TABLE search USING fts5(name, kind UNINDEXED, lat UNINDEXED, lon UNINDEXED, "
                 "tokenize='unicode61 remove_diacritics 2')")
     con.executemany("INSERT INTO search (name, kind, lat, lon) VALUES (?, ?, ?, ?)", SEARCH_ROWS)
+    write_address_tables(con)
     con.commit()
     con.close()
 

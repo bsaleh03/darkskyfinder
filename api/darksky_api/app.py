@@ -20,6 +20,7 @@ from . import config
 from .config import Settings, load_settings
 from .data import DataStore
 from .forecast import ForecastClient
+from .geocode import GeocodeClient
 from .ratelimit import SlidingWindowLimiter
 from .routing import RoutingClient
 from .schemas import Health, Region, SearchHit, SpotsResponse
@@ -74,6 +75,7 @@ def _rate_limited() -> JSONResponse:
 def create_app(store: DataStore, routing, forecast, settings: Settings,
                limiter: SlidingWindowLimiter | None = None,
                search_limiter: SlidingWindowLimiter | None = None,
+               geocoder: GeocodeClient | None = None,
                today: Callable[[str], date] | None = None,
                now: Callable[[str], datetime] | None = None) -> FastAPI:
     app = FastAPI(title="Dark Sky Finder API", version="0.1.0")
@@ -109,7 +111,7 @@ def create_app(store: DataStore, routing, forecast, settings: Settings,
                      limit: int = Query(8, ge=1, le=20)):
         if not search_limiter.allow(_client_ip(request, hops)):
             return _rate_limited()
-        return search(store, q, metro=metro, limit=limit)
+        return search(store, q, metro=metro, limit=limit, geocoder=geocoder)
 
     @app.get("/api/spots", response_model=SpotsResponse)
     def spots(request: Request,
@@ -136,4 +138,5 @@ def build_default_app() -> FastAPI:
     settings = load_settings(os.environ)
     store = DataStore.load(settings.data_dir)
     http = httpx.Client()
-    return create_app(store, RoutingClient(http, settings.ors_api_key), ForecastClient(http), settings)
+    return create_app(store, RoutingClient(http, settings.ors_api_key), ForecastClient(http), settings,
+                      geocoder=GeocodeClient(http, settings.ors_api_key))

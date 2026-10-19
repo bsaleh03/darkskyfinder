@@ -36,6 +36,37 @@ def test_search(client):
     assert client.get("/api/search", params={"q": "x", "limit": 99}).status_code == 422
 
 
+def test_search_hits_have_source(client):
+    hit = client.get("/api/search", params={"q": "150 main st testville"}).json()[0]
+    assert hit["kind"] == "address" and hit["source"] == "overture" and hit["name"] == "150 Main St, Testville"
+
+
+def test_search_uses_geocoder_fallback(store):
+    class Geo:
+        def search(self, text, bboxes):
+            return [{"name": "5500 Telegraph Road, Testville", "kind": "address", "lat": 41.9, "lon": -84.1,
+                     "metro": "test", "source": "openrouteservice"}]
+
+    app = create_app(store, FakeRouting(MINUTES), FakeForecast(), SETTINGS, geocoder=Geo(), today=fixed_today)
+    hits = TestClient(app).get("/api/search", params={"q": "5500 telegraph rd"}).json()
+    assert hits == [{"name": "5500 Telegraph Road, Testville", "kind": "address", "lat": 41.9, "lon": -84.1,
+                     "metro": "test", "source": "openrouteservice"}]
+
+
+def test_default_app_wires_geocoder(monkeypatch, tmp_path, data_dir):
+    from darksky_api import app as app_module
+    from darksky_api.geocode import GeocodeClient
+
+    seen = {}
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+    monkeypatch.chdir(tmp_path)  # never read the real .env
+    monkeypatch.delenv("ORS_API_KEY", raising=False)
+    monkeypatch.setattr(app_module, "DataStore", type("DS", (), {"load": staticmethod(lambda d: None)}))
+    monkeypatch.setattr(app_module, "create_app", lambda *a, **kw: seen.update(kw))
+    app_module.build_default_app()
+    assert isinstance(seen["geocoder"], GeocodeClient)
+
+
 def test_spots_ok(client):
     r = client.get("/api/spots", params={"lat": CITY[1], "lon": CITY[0]})
     assert r.status_code == 200

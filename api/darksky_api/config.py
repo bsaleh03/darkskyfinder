@@ -58,6 +58,15 @@ FALLBACK_SPEED_KMH = 95.0  # Google's samples average ~70 km/h straight-line; x1
 # call that favours the longer dark-site drives this app is mostly used for.
 ROUTE_TIME_FACTOR = 0.8
 
+# Address geocoding fallback (OpenRouteService / Pelias), used only when Overture has no address hit.
+ORS_GEOCODE_URL = "https://api.openrouteservice.org/geocode/search"
+ORS_GEOCODE_DAILY_BUDGET = 500  # separate from the matrix budget
+GEOCODE_CACHE_TTL_S = 24 * 3600
+GEOCODE_CACHE_MAX = 5_000  # normalized queries
+GEOCODE_SIZE = 5
+GEOCODE_COUNTRIES = "US,CA"
+GEOCODE_MIN_LETTERS = 4  # street letters after the house number before a query is address-like
+
 # Forecast (Open-Meteo)
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 FORECAST_TIMEOUT_S = 5.0
