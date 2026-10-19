@@ -16,7 +16,16 @@ vi.mock('../../src/api/client', async (orig) => {
 })
 const fetchSearch = vi.mocked(client.fetchSearch)
 
-const hit = (name: string, metro = 'se_mi'): SearchHit => ({ name, kind: 'Locality', lat: 42.5, lon: -83.1, metro })
+const hit = (name: string, metro = 'se_mi', extra: Partial<SearchHit> = {}): SearchHit => ({
+  name,
+  kind: 'Locality',
+  lat: 42.5,
+  lon: -83.1,
+  metro,
+  source: 'overture',
+  ...extra,
+})
+const ORS_ATTRIBUTION = 'Address lookup © openrouteservice.org, OpenStreetMap contributors'
 
 function renderBox(onPick = vi.fn()) {
   const qc = makeQueryClient()
@@ -47,6 +56,35 @@ function type(text: string) {
 }
 
 describe('SearchBox', () => {
+  it('placeholder invites addresses', () => {
+    renderBox()
+    expect(screen.getByRole('combobox')).toHaveAttribute('placeholder', 'Search a town, place or address')
+  })
+
+  it('address hits read "address · <region>" with no attribution for Overture', async () => {
+    fetchSearch.mockResolvedValue([hit('150 Main St, Royal Oak', 'se_mi', { kind: 'address' })])
+    renderBox()
+    type('150 main')
+    await advance(400)
+    expect(screen.getByRole('option')).toHaveTextContent('address · Michigan')
+    expect(screen.queryByText(ORS_ATTRIBUTION)).toBeNull()
+  })
+
+  it('shows the openrouteservice attribution when a shown hit came from it', async () => {
+    fetchSearch.mockResolvedValue([
+      hit('5500 Telegraph Road, Dearborn Heights', 'se_mi', { kind: 'address', source: 'openrouteservice' }),
+    ])
+    const onPick = renderBox()
+    type('5500 telegraph rd')
+    await advance(400)
+    const note = screen.getByText(ORS_ATTRIBUTION)
+    expect(screen.getByRole('listbox')).not.toContainElement(note) // not an option
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('option'))
+    expect(onPick).toHaveBeenCalledOnce()
+    expect(screen.queryByText(ORS_ATTRIBUTION)).toBeNull() // closes with the list
+  })
+
   it('search shows hits and picks with keyboard', async () => {
     fetchSearch.mockResolvedValue([hit('Royal Oak'), hit('Royal Palm', 'bay_area')])
     const onPick = renderBox()

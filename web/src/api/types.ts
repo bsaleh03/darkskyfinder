@@ -15,6 +15,8 @@ export interface SearchHit {
   lat: number
   lon: number
   metro: string
+  /** Overture's own index, or the openrouteservice geocoder fallback for street addresses. */
+  source: 'overture' | 'openrouteservice'
 }
 
 export interface Health {

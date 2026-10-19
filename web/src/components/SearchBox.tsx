@@ -4,6 +4,7 @@ import type { SearchHit } from '../api/types'
 import './SearchBox.css'
 
 const METRO_NAMES: Record<string, string> = { se_mi: 'Michigan', bay_area: 'SF Bay Area' }
+const ORS_ATTRIBUTION = 'Address lookup © openrouteservice.org, OpenStreetMap contributors'
 
 export function metroName(key: string): string {
   return METRO_NAMES[key] ?? key
@@ -17,7 +18,7 @@ interface Props {
   onDismiss?: (via: 'escape' | 'blur', next: Element | null) => void
 }
 
-export function SearchBox({ onPick, placeholder = 'Search a town or place', autoFocus, onDismiss }: Props) {
+export function SearchBox({ onPick, placeholder = 'Search a town, place or address', autoFocus, onDismiss }: Props) {
   const [text, setText] = useState('')
   const [dismissed, setDismissed] = useState(false)
   const [active, setActive] = useState(-1)
@@ -90,24 +91,29 @@ export function SearchBox({ onPick, placeholder = 'Search a town or place', auto
         }}
       />
       {open && (
-        <ul className="search-list" role="listbox" id={listId} aria-label="Search results">
-          {shown.map((h, i) => (
-            <li
-              key={`${h.name}|${h.lat}|${h.lon}`}
-              id={optionId(i)}
-              role="option"
-              aria-selected={i === active}
-              className="search-option"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(h)}
-            >
-              <span className="search-name">{h.name}</span>
-              <span className="search-meta">
-                {h.kind} {'·'} {metroName(h.metro)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="search-popup">
+          <ul className="search-list" role="listbox" id={listId} aria-label="Search results">
+            {shown.map((h, i) => (
+              <li
+                key={`${h.name}|${h.lat}|${h.lon}`}
+                id={optionId(i)}
+                role="option"
+                aria-selected={i === active}
+                className="search-option"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(h)}
+              >
+                <span className="search-name">{h.name}</span>
+                <span className="search-meta">
+                  {h.kind} {'·'} {metroName(h.metro)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {shown.some((h) => h.source === 'openrouteservice') && (
+            <p className="search-attribution">{ORS_ATTRIBUTION}</p>
+          )}
+        </div>
       )}
     </div>
   )

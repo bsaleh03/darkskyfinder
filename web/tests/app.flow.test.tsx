@@ -319,7 +319,7 @@ describe('App flow', () => {
   })
 
   it('search pick shows the picked name as start label', async () => {
-    fetchSearch.mockResolvedValue([{ name: 'Royal Oak', kind: 'Locality', lat: 42.49, lon: -83.14, metro: 'se_mi' }])
+    fetchSearch.mockResolvedValue([{ name: 'Royal Oak', kind: 'Locality', lat: 42.49, lon: -83.14, metro: 'se_mi', source: 'overture' }])
     fetchSpots.mockResolvedValue(response())
     render(<App />)
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'royal' } })
@@ -335,7 +335,7 @@ describe('App flow', () => {
     render(<App />)
     await screen.findByText('Great night for stars.')
     expect(within(mapEl()!).getByRole('button', { name: 'Lake Park Beach' })).toBeInTheDocument()
-    fetchSearch.mockResolvedValue([{ name: 'Ann Arbor', kind: 'Locality', lat: 42.28, lon: -83.74, metro: 'se_mi' }])
+    fetchSearch.mockResolvedValue([{ name: 'Ann Arbor', kind: 'Locality', lat: 42.28, lon: -83.74, metro: 'se_mi', source: 'overture' }])
     fetchSpots.mockReturnValue(new Promise(() => {}))
     fireEvent.click(screen.getByRole('button', { name: 'Dropped pin' }))
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ann' } })

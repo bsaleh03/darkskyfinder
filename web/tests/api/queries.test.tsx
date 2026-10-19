@@ -293,7 +293,7 @@ describe('useSearch', () => {
 
   it('ignores out-of-order search responses', async () => {
     type Hits = Awaited<ReturnType<typeof client.fetchSearch>>
-    const hit = (name: string): Hits => [{ name, kind: 'city', lat: 1, lon: 2, metro: 'se_mi' }]
+    const hit = (name: string): Hits => [{ name, kind: 'city', lat: 1, lon: 2, metro: 'se_mi', source: 'overture' }]
     const resolvers: Record<string, (v: Hits) => void> = {}
     fetchSearch.mockImplementation(
       (q) =>

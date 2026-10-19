@@ -20,20 +20,31 @@
   color: var(--muted);
 }
 
-.search-list {
+.search-popup {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   right: 0;
   z-index: 10;
-  margin: 0;
   padding: 4px;
-  list-style: none;
   max-height: 50vh;
   overflow-y: auto;
   background: var(--sky-3);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-control);
+}
+
+.search-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-attribution {
+  margin: 0;
+  padding: 4px 10px 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .search-option {
