@@ -4,8 +4,9 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 480px;
-  margin: 16px;
+  box-sizing: border-box;
+  width: min(480px, calc(100% - 32px));
+  margin: auto; /* centred in the screen (the .app column is at least full height), 16px gutter on phones */
   padding: 18px 16px;
   color: var(--ink);
   background: var(--glass);
@@ -92,12 +93,6 @@
 @keyframes skeleton-pulse {
   50% {
     opacity: 0.5;
-  }
-}
-
-@media (width >= 900px) {
-  .welcome {
-    margin: 24px;
   }
 }
 
