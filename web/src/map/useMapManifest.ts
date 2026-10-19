@@ -4,9 +4,15 @@ import type { MapLevel } from './framing'
 import type { MapLabel } from './labels'
 import type { Bounds } from './projection'
 
-export type MapFileKey = 'base' | 'base_red' | 'glow' | 'glow_red'
-/** Kinds with tiles at levels >= 1 (the glow is level 0 only). */
-export type MapTileKey = 'base' | 'base_red'
+/**
+ * Picture kinds. base / base_red: the map alone. v3 manifests add base_glow / base_glow_red, the map with the glow
+ * drawn in (shown when the glow is on, so it appears with the map). Older manifests instead have glow / glow_red, a
+ * transparent level-0 glow laid over the base.
+ */
+export type MapFileKey = 'base' | 'base_red' | 'base_glow' | 'base_glow_red' | 'glow' | 'glow_red'
+/** Kinds with tiles at levels >= 1: the base kinds, and in v3 the composites (an overlay glow is level 0 only). */
+export type MapTileKey = 'base' | 'base_red' | 'base_glow' | 'base_glow_red'
+type Templates<K extends string> = Record<'base' | 'base_red', string> & Partial<Record<K, string>>
 
 /** The pipeline's per-region picture manifest (pipeline/out/maps/<metro>/web/manifest.json). */
 export type MapManifest = {
@@ -15,14 +21,15 @@ export type MapManifest = {
   /** height / width of every picture */
   aspect: number
   widths: number[]
-  /** file name templates relative to the manifest, with {w} for the width */
-  files: Record<MapFileKey, string>
+  /** file name templates relative to the manifest, with {w} for the width: base and base_red, plus either the glow
+   * composites (v3) or the glow overlay (v1/v2) */
+  files: Templates<Exclude<MapFileKey, 'base' | 'base_red'>>
   labels: string
   /** v2: the levels (level 0 is the whole picture at `widths`; level l >= 1 is a grid of full-width tiles) */
   levels?: MapLevel[]
-  /** v2: base and base_red tile file name templates relative to the manifest, with {l}, {c} and {r} for level,
-   * column and row (any glow templates are ignored) */
-  tiles?: Record<MapTileKey, string>
+  /** v2: tile file name templates relative to the manifest, with {l}, {c} and {r} for level, column and row: base and
+   * base_red, and in v3 base_glow and base_glow_red (overlay glow templates are ignored) */
+  tiles?: Templates<'base_glow' | 'base_glow_red'>
 }
 
 const LEVEL_0: MapLevel = { level: 0, cols: 1, rows: 1 }
@@ -38,16 +45,24 @@ export type MapManifestState = {
 
 export const manifestUrl = (metro: string) => `${config.tilesUrl.replace(/\/+$/, '')}/maps/${metro}/manifest.json`
 
+/** v3: the glow comes drawn into base_glow / base_glow_red (no overlay picture). */
+export const hasGlowComposite = (m: MapManifest): boolean =>
+  typeof m.files.base_glow === 'string' && typeof m.files.base_glow_red === 'string'
+
 /** Absolute URL of a picture file: the template with {w} filled in, resolved against the manifest's URL. */
 export function mapFileUrl(manifest: MapManifest, key: MapFileKey, width: number): string {
   const base = new URL(manifestUrl(manifest.metro), window.location.href)
-  return new URL(manifest.files[key].replace('{w}', String(width)), base).href
+  const template = manifest.files[key]
+  if (template === undefined) throw new Error(`no ${key} pictures in the ${manifest.metro} manifest`)
+  return new URL(template.replace('{w}', String(width)), base).href
 }
 
 /** Absolute URL of one tile of a level >= 1, resolved against the manifest's URL. */
 export function mapTileUrl(manifest: MapManifest, key: MapTileKey, level: number, col: number, row: number): string {
   const base = new URL(manifestUrl(manifest.metro), window.location.href)
-  const name = manifest.tiles![key].replace('{l}', String(level)).replace('{c}', String(col)).replace('{r}', String(row))
+  const template = manifest.tiles?.[key]
+  if (template === undefined) throw new Error(`no ${key} tiles in the ${manifest.metro} manifest`)
+  const name = template.replace('{l}', String(level)).replace('{c}', String(col)).replace('{r}', String(row))
   return new URL(name, base).href
 }
 
@@ -59,16 +74,23 @@ async function getJson(url: string, signal: AbortSignal): Promise<unknown> {
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
-const KEYS = ['base', 'base_red', 'glow', 'glow_red'] as const
-const TILE_KEYS = ['base', 'base_red'] as const
+const PLAIN = ['base', 'base_red'] as const
+const COMPOSITE = ['base_glow', 'base_glow_red'] as const
+const OVERLAY = ['glow', 'glow_red'] as const
 const isCount = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0
 const hasTemplates = (v: unknown, keys: readonly string[]) =>
   typeof v === 'object' && v !== null && keys.every((k) => typeof (v as Record<string, unknown>)[k] === 'string')
-const isTemplates = (v: unknown): v is Record<MapFileKey, string> => hasTemplates(v, KEYS)
-const isTileTemplates = (v: unknown): v is Record<MapTileKey, string> => hasTemplates(v, TILE_KEYS)
+/** base and base_red, and a glow source: the composite pair (v3) or the overlay pair (v1/v2). */
+const isTemplates = (v: unknown): v is MapManifest['files'] =>
+  hasTemplates(v, PLAIN) && (hasTemplates(v, COMPOSITE) || hasTemplates(v, OVERLAY))
 
-/** v2 additions: absent (v1, level 0 only), or levels with whole positive grids, and base tile templates for level >= 1. */
+/**
+ * v2 additions: absent (v1, level 0 only), or levels with whole positive grids, and tile templates for level >= 1:
+ * base and base_red, plus the composites when the level-0 files are composites (v3).
+ */
 function levelsOk(m: Partial<MapManifest>): boolean {
+  const tileKeys = hasTemplates(m.files, COMPOSITE) ? [...PLAIN, ...COMPOSITE] : PLAIN
+  const isTileTemplates = (v: unknown) => hasTemplates(v, tileKeys)
   if (m.levels === undefined) return m.tiles === undefined || isTileTemplates(m.tiles)
   if (!Array.isArray(m.levels) || m.levels.length === 0) return false
   const ok = m.levels.every(
@@ -78,7 +100,7 @@ function levelsOk(m: Partial<MapManifest>): boolean {
   return m.levels.every((l) => l.level === 0) || isTileTemplates(m.tiles)
 }
 
-/** Validate the manifest of `metro` (v1, or v2 with levels and tiles). */
+/** Validate the manifest of `metro` (v1, v2 with levels and tiles, or v3 with the glow composites). */
 export function parseManifest(v: unknown, metro: string): MapManifest {
   const m = v as Partial<MapManifest> | null
   const ok =

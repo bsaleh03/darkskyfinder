@@ -87,8 +87,11 @@ export function fetchSpots(p: SpotsParams, signal?: AbortSignal): Promise<SpotsR
   return request<SpotsResponse>('/api/spots', q, signal)
 }
 
-export function fetchSearch(q: string, signal?: AbortSignal): Promise<SearchHit[]> {
-  return request<SearchHit[]>('/api/search', new URLSearchParams({ q }), signal)
+/** Suggestions while typing use Overture only; `geocode` (an explicit search) may also ask the address geocoder. */
+export function fetchSearch(q: string, signal?: AbortSignal, opts: { geocode?: boolean } = {}): Promise<SearchHit[]> {
+  const params = new URLSearchParams({ q })
+  if (opts.geocode) params.set('geocode', 'true')
+  return request<SearchHit[]>('/api/search', params, signal)
 }
 
 export function fetchRegions(): Promise<Region[]> {

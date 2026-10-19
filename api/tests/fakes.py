@@ -10,9 +10,11 @@ class FakeRouting:
         self.minutes = minutes
         self.estimate = estimate
         self.calls = []
+        self.dests = []
 
     def drive_minutes(self, start, dests):
         self.calls.append((start, [d[0] for d in dests]))
+        self.dests.append(list(dests))
         if self.minutes is None:
             out = {i: estimate_minutes(haversine_km(start[0], start[1], lon, lat)) for i, lon, lat in dests}
         else:

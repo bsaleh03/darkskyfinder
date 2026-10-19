@@ -43,6 +43,11 @@
   opacity: 1;
 }
 
+/* A tile that replaced another one (the glow switched) shows at once: no fade from the picture underneath. */
+.static-map-tile--swapped {
+  transition: none;
+}
+
 .static-map-label,
 .static-map-start,
 .static-map-pin {

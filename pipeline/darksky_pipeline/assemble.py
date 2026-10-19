@@ -14,7 +14,7 @@ from .roads import ViewingPoint
 from .spots import Candidate
 from .util import atomic_path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def access_badge(category: str, curated: CuratedEntry | None) -> str:
@@ -46,7 +46,8 @@ def _amenity(a: Amenity | None) -> dict | None:
 
 
 def assemble_spot(c: Candidate, vp: ViewingPoint, glare: Glare, horizon: Horizon,
-                  amenities: dict[str, Amenity | None], curated: CuratedEntry | None) -> dict:
+                  amenities: dict[str, Amenity | None], curated: CuratedEntry | None,
+                  entry: tuple[float, float] | None = None) -> dict:
     dark_sky = bool(curated and curated.dark_sky_place)
     return {
         "id": c.id,
@@ -54,6 +55,7 @@ def assemble_spot(c: Candidate, vp: ViewingPoint, glare: Glare, horizon: Horizon
         "category": c.category,
         "lon": round(vp.lon, 6),
         "lat": round(vp.lat, 6),
+        "entry": None if entry is None else {"lon": round(entry[0], 6), "lat": round(entry[1], 6)},
         "sqm": round(vp.sqm, 2),
         "radiance": round(vp.radiance, 2),
         "bortle": bortle(vp.sqm),

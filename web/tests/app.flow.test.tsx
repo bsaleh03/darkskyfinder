@@ -14,7 +14,12 @@ const MANIFEST = vi.hoisted(() => ({
   bounds: [-86.9, 41.65, -82.4, 45.9] as [number, number, number, number],
   aspect: 1.3089,
   widths: [874, 1748, 3496],
-  files: { base: 'base_{w}.webp', base_red: 'base_red_{w}.webp', glow: 'glow_{w}.webp', glow_red: 'glow_red_{w}.webp' },
+  files: {
+    base: 'base_{w}.webp',
+    base_red: 'base_red_{w}.webp',
+    base_glow: 'base_glow_{w}.webp',
+    base_glow_red: 'base_glow_red_{w}.webp',
+  },
   labels: 'labels.json',
 }))
 vi.mock('../src/map/useMapManifest', async (orig) => ({
@@ -64,6 +69,7 @@ const spot = (over: Partial<Spot> = {}): Spot => ({
   category: 'park',
   lon: -83.5,
   lat: 42.5,
+  entry: null,
   sqm: 21.4,
   bortle: 3,
   sky_label: 'Milky Way vivid',
@@ -192,7 +198,7 @@ describe('App flow', () => {
     expect(screen.getByRole('button', { name: 'Dropped pin' })).toBeInTheDocument()
     // The map shows the region picture, the start and one pin button per spot.
     const map = within(mapEl()!)
-    expect(mapImages()[0]).toMatch(/\/tiles\/maps\/se_mi\/base_\d+\.webp$/)
+    expect(mapImages()[0]).toMatch(/\/tiles\/maps\/se_mi\/base_glow_\d+\.webp$/)
     expect(map.getByRole('img', { name: 'Your start' })).toBeInTheDocument()
     expect(['Closed Park', 'Lake Park Beach', 'Hidden Lake'].map((n) => map.getByRole('button', { name: n }))).toHaveLength(3)
     expect(screen.getByRole('group', { name: 'Choose a night' })).toBeInTheDocument()
@@ -212,7 +218,16 @@ describe('App flow', () => {
     expect(window.history.length).toBe(before + 1)
     expect(list().getByRole('button', { name: /Hidden Lake/ })).toHaveAttribute('aria-expanded', 'true')
     expect(within(mapEl()!).getByRole('button', { name: 'Hidden Lake' }).className).toContain('static-map-pin--selected')
-    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled())
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' })))
+  })
+
+  it('controls sit above the map', async () => {
+    go(START)
+    fetchSpots.mockResolvedValue(response())
+    render(<App />)
+    await screen.findByText('Great night for stars.')
+    const slider = screen.getByRole('slider')
+    expect(slider.compareDocumentPosition(mapEl()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('clicking a pin opens its card and leaves the full map', async () => {
@@ -304,7 +319,7 @@ describe('App flow', () => {
   })
 
   it('search pick shows the picked name as start label', async () => {
-    fetchSearch.mockResolvedValue([{ name: 'Royal Oak', kind: 'Locality', lat: 42.49, lon: -83.14, metro: 'se_mi' }])
+    fetchSearch.mockResolvedValue([{ name: 'Royal Oak', kind: 'Locality', lat: 42.49, lon: -83.14, metro: 'se_mi', source: 'overture' }])
     fetchSpots.mockResolvedValue(response())
     render(<App />)
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'royal' } })
@@ -320,7 +335,7 @@ describe('App flow', () => {
     render(<App />)
     await screen.findByText('Great night for stars.')
     expect(within(mapEl()!).getByRole('button', { name: 'Lake Park Beach' })).toBeInTheDocument()
-    fetchSearch.mockResolvedValue([{ name: 'Ann Arbor', kind: 'Locality', lat: 42.28, lon: -83.74, metro: 'se_mi' }])
+    fetchSearch.mockResolvedValue([{ name: 'Ann Arbor', kind: 'Locality', lat: 42.28, lon: -83.74, metro: 'se_mi', source: 'overture' }])
     fetchSpots.mockReturnValue(new Promise(() => {}))
     fireEvent.click(screen.getByRole('button', { name: 'Dropped pin' }))
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ann' } })
@@ -337,15 +352,15 @@ describe('App flow', () => {
     fetchSpots.mockResolvedValue(response())
     render(<App />)
     await screen.findByText('Great night for stars.')
-    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/), expect.stringMatching(/\/glow_\d+\.webp$/)])
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_glow_\d+\.webp$/)])
     const before = window.history.length
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
     expect(document.documentElement.dataset.red).toBe('true')
-    expect(mapImages()).toEqual([expect.stringMatching(/\/base_red_\d+\.webp$/), expect.stringMatching(/\/glow_red_\d+\.webp$/)])
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_glow_red_\d+\.webp$/)])
     expect(window.location.search).toBe('?lat=42.49&lon=-83.14')
     expect(window.history.length).toBe(before)
     fireEvent.click(screen.getByRole('switch', { name: 'Red mode' }))
-    expect(mapImages()).toEqual([expect.stringMatching(/\/base_\d+\.webp$/), expect.stringMatching(/\/glow_\d+\.webp$/)])
+    expect(mapImages()).toEqual([expect.stringMatching(/\/base_glow_\d+\.webp$/)])
   })
 
   it('the glow toggle on the map sets glow=0 in the URL', async () => {

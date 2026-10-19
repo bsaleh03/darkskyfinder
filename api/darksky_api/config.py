@@ -28,14 +28,16 @@ METROS: dict[str, MetroInfo] = {
                           "America/Los_Angeles", "San Francisco", "US", "US-CA"),
 }
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 NIGHT_DAYS_AHEAD = 6
 
 # Spots query
 DEFAULT_MAX_DRIVE = 90
 MIN_MAX_DRIVE, MAX_MAX_DRIVE = 15, 240
 DEFAULT_LIMIT, MAX_LIMIT = 25, 50
-PREFILTER_KM_PER_MIN = 1.2
+# Straight-line km per minute of max_drive kept before routing. Calibrated ORS times (x0.8) on
+# freeways cover ~1.3 km/min straight-line, so 1.5 leaves headroom.
+PREFILTER_KM_PER_MIN = 1.5
 PREFILTER_MAX_SPOTS = 50
 MAX_UNAVAILABLE_SHOWN = 10
 
@@ -48,7 +50,22 @@ ROUTE_CACHE_ROUND = 2  # decimal places of start lon/lat (~1 km)
 ROUTE_CACHE_MAX = 50_000  # (start, spot) pairs
 ROUTE_FAILURE_BACKOFF_S = 60
 FALLBACK_ROAD_FACTOR = 1.35
-FALLBACK_SPEED_KMH = 60.0
+FALLBACK_SPEED_KMH = 95.0  # Google's samples average ~70 km/h straight-line; x1.35 road factor
+# ORS runs slower than Google Maps. Calibration samples (Google min / ORS min, same endpoints):
+# Ortonville 39/52, Crosswinds Marsh 39/57, Ann Arbor 53/60, Detroit 20/22, SF->Livermore 50/56
+# (ratios 0.68-0.91). Applied to ORS durations only, never to fallback estimates.
+# 0.8 sits between the sample median (0.88) and the exurban freeway samples (0.68-0.75): a judgement
+# call that favours the longer dark-site drives this app is mostly used for.
+ROUTE_TIME_FACTOR = 0.8
+
+# Address geocoding fallback (OpenRouteService / Pelias), used only when Overture has no address hit.
+ORS_GEOCODE_URL = "https://api.openrouteservice.org/geocode/search"
+ORS_GEOCODE_DAILY_BUDGET = 500  # separate from the matrix budget
+GEOCODE_CACHE_TTL_S = 24 * 3600
+GEOCODE_CACHE_MAX = 5_000  # normalized queries
+GEOCODE_SIZE = 5
+GEOCODE_COUNTRIES = "US,CA"
+GEOCODE_MIN_LETTERS = 4  # street letters after the house number before a query is address-like
 
 # Forecast (Open-Meteo)
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"

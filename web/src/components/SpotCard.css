@@ -5,6 +5,7 @@
   border-radius: var(--radius-card);
   color: var(--ink);
   overflow: hidden;
+  scroll-margin-top: 8px; /* opening a card scrolls it to the top, with a little air above */
 }
 
 .spot-card--unavailable {
@@ -156,25 +157,45 @@
   color: var(--muted);
 }
 
-.scrubber {
-  display: flex;
-  gap: 4px;
-  padding: 0;
+.scrubber-wrap {
   margin: 12px 0 0;
+}
+
+/* Equal hour columns (--scrubber-col, measured to fit whole columns in the view; gap = SCRUBBER_GAP in
+   NightScrubber.tsx), snapped to column starts, with a thin themed scrollbar. */
+.scrubber {
+  display: grid;
+  grid-auto-columns: var(--scrubber-col, 52px);
+  grid-auto-flow: column;
+  gap: 4px;
+  padding: 0 0 6px;
+  margin: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   list-style: none;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* More hours off-screen: the right edge fades softly (alpha mask only, no colour of its own); not to nothing, so the
+   last whole column still reads as whole. */
+.scrubber-wrap--more .scrubber {
+  mask-image: linear-gradient(to left, color-mix(in srgb, currentcolor 55%, transparent), currentcolor 32px);
 }
 
 .scrubber-hour {
+  box-sizing: border-box;
   display: flex;
-  flex: 1 0 36px;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
-  padding: 4px 2px;
-  font-size: 0.7rem;
+  min-width: 0;
+  padding: 6px 2px;
+  font-size: 0.72rem;
   border: 1px solid transparent;
   border-radius: 8px;
+  scroll-snap-align: start;
   transition: opacity 0.2s;
 }
 
@@ -182,6 +203,7 @@
   opacity: 0.35;
 }
 
+/* Same box for every hour (the border is always there, transparent outside the best window): nothing shifts. */
 .scrubber-hour--best {
   border-color: var(--amber);
 }
@@ -202,15 +224,26 @@
   border-radius: 4px;
 }
 
+/* Three fixed-height rows (cloud, fog, moon) in every hour, so they line up across the columns. */
 .scrubber-icons {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 1em;
+  display: grid;
+  grid-template-rows: repeat(3, 1rem);
+  justify-items: center;
+  width: 100%;
   color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1rem;
+}
+
+.scrubber-icon {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .scrubber-time {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -218,7 +251,7 @@
 .darkness-track {
   position: relative;
   height: 8px;
-  margin: 20px 0 6px;
+  margin: 22px 0 24px;
   background: linear-gradient(to right, var(--sky-4), var(--violet));
   border-radius: 4px;
 }
@@ -238,32 +271,32 @@
 
 .darkness-marker-label {
   position: absolute;
-  bottom: 18px;
+  bottom: 20px;
   left: 50%;
-  font-size: 0.65rem;
-  color: var(--muted);
+  font-size: 0.72rem;
+  color: var(--ink);
   white-space: nowrap;
   transform: translateX(-50%);
 }
 
-.darkness-labels {
-  position: relative;
-  height: 1.2em;
-  padding: 0;
-  margin: 0;
-  font-size: 0.65rem;
+.darkness-marker--home .darkness-marker-label {
   color: var(--muted);
-  list-style: none;
 }
 
-.darkness-label {
-  position: absolute;
-  top: 0;
-  white-space: nowrap;
+.darkness-marker-label--below {
+  top: 20px;
+  bottom: auto;
 }
 
-.darkness-label--end {
-  right: 0;
+.darkness-marker-label--start {
+  left: -2px;
+  transform: none;
+}
+
+.darkness-marker-label--end {
+  right: -2px;
+  left: auto;
+  transform: none;
 }
 
 .why-chips {
@@ -317,7 +350,7 @@
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  margin-top: 16px;
+  margin: 4px 0 12px;
   font-weight: 800;
   color: var(--sky-4);
   text-decoration: none;
@@ -343,4 +376,33 @@
   .scrubber-hour {
     transition: none;
   }
+}
+
+
+.spot-more {
+  margin-top: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+}
+
+.spot-more[aria-expanded="true"] {
+  border-color: var(--muted);
+}
+
+.spot-more:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.spot-more-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }

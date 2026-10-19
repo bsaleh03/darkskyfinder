@@ -29,6 +29,7 @@ const spot = (over: Partial<Spot> = {}): Spot => ({
   category: 'park',
   lon: -83.5,
   lat: 42.5,
+  entry: null,
   sqm: 21.4,
   bortle: 3,
   sky_label: 'vivid',
@@ -114,11 +115,28 @@ describe('SpotCard', () => {
     expect(hours[1].classList.contains('scrubber-hour--best')).toBe(true)
     expect(hours[2].classList.contains('scrubber-hour--best')).toBe(false)
     expect(screen.getByRole('button', { expanded: true })).toBeTruthy()
-    expect(screen.getByText('Milky Way casts shadows')).toBeTruthy()
+    expect(screen.getByText(/^This spot · /)).toBeTruthy()
+  })
+
+  it('open card leads with Directions, then the hour-by-hour bar; details sit behind a toggle', () => {
+    const { container } = show(spot({ sources: [{ name: 'Astro Club', url: 'https://example.com/a' }] }), { expanded: true })
+    const body = container.querySelector('.spot-body')!
+    const directions = body.querySelector('.directions-button')!
+    const scrubber = body.querySelector('.scrubber')!
+    expect(directions.compareDocumentPosition(scrubber) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const more = screen.getByRole('button', { name: 'More about this spot' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('The numbers')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Astro Club' })).toBeNull()
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('The numbers')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Astro Club' })).toBeTruthy()
   })
 
   it('sources open in new tab with rel noopener noreferrer', () => {
     show(spot({ sources: [{ name: 'Astro Club', url: 'https://example.com/a' }] }), { expanded: true })
+    fireEvent.click(screen.getByRole('button', { name: 'More about this spot' }))
     const a = screen.getByRole('link', { name: 'Astro Club' })
     expect(a.getAttribute('target')).toBe('_blank')
     expect(a.getAttribute('rel')).toBe('noopener noreferrer')
@@ -136,6 +154,7 @@ describe('SpotCard', () => {
       }),
       { expanded: true },
     )
+    fireEvent.click(screen.getByRole('button', { name: 'More about this spot' }))
     expect(screen.getByRole('link', { name: 'Good' })).toHaveAttribute('href', 'http://example.com/b')
     for (const name of ['Script', 'Relative', 'Data']) {
       expect(screen.getByText(name).closest('a')).toBeNull()
@@ -160,6 +179,25 @@ describe('SpotCard', () => {
     const text = container.textContent ?? ''
     expect(text).not.toMatch(/null|undefined|NaN/)
     expect(screen.getByRole('link', { name: /Directions/ })).toBeTruthy()
+  })
+})
+
+describe('directions target', () => {
+  it('uses the entrance when present', () => {
+    show(spot({ entry: { lon: -83.6, lat: 42.6 } }), { expanded: true })
+    const href = screen.getByRole('link', { name: /Directions/ }).getAttribute('href') ?? ''
+    expect(href).toContain('42.6,-83.6')
+    expect(href).not.toContain('42.5,-83.5')
+  })
+  it('falls back to the spot point when entry is null or missing', () => {
+    show(spot({ entry: null }), { expanded: true })
+    expect(screen.getByRole('link', { name: /Directions/ }).getAttribute('href')).toContain('42.5,-83.5')
+  })
+  it('treats a missing entry field as null', () => {
+    const s = spot()
+    delete (s as Partial<Spot>).entry
+    show(s, { expanded: true })
+    expect(screen.getByRole('link', { name: /Directions/ }).getAttribute('href')).toContain('42.5,-83.5')
   })
 })
 
@@ -226,6 +264,21 @@ describe('fix round 1', () => {
     expect(screen.getByRole('img', { name: 'Home: A few stars; this spot: Milky Way' })).toBeTruthy()
     rerender(<DarknessScale homeSqm={null} spotSqm={21} />)
     expect(screen.getByRole('img', { name: 'This spot: Milky Way' })).toBeTruthy()
+  })
+
+  it('darkness scale shows just two labels: the spot above the bar, home below', () => {
+    const { container } = render(<DarknessScale homeSqm={19} spotSqm={21.9} />)
+    expect(container.querySelectorAll('.darkness-labels, .darkness-label')).toHaveLength(0) // no band legend
+    const spot = container.querySelector('.darkness-marker--spot .darkness-marker-label')!
+    const home = container.querySelector('.darkness-marker--home .darkness-marker-label')!
+    expect(spot.textContent).toBe('This spot · Milky Way casts shadows')
+    expect(home.textContent).toBe('Home · A few stars')
+    expect(home.classList.contains('darkness-marker-label--below')).toBe(true)
+    expect(spot.classList.contains('darkness-marker-label--below')).toBe(false)
+    // Near the ends, labels anchor inward so they never clip.
+    expect(spot.classList.contains('darkness-marker-label--end')).toBe(true)
+    const { container: c2 } = render(<DarknessScale homeSqm={17.2} spotSqm={19.5} />)
+    expect(c2.querySelector('.darkness-marker--home .darkness-marker-label')!.classList.contains('darkness-marker-label--start')).toBe(true)
   })
 
   it('clicking header calls onToggle', () => {

@@ -120,7 +120,8 @@ const under = (p: { x: number; y: number }, r: number, o: Box) =>
  * Contain-fit `box` into the view minus a small uniform inset, then keep every mark (with its hit radius) out of
  * the overlay rects (screen px, e.g. corner buttons and the attribution): when one is under an overlay, the
  * framing widens just enough on the side that moves it out vertically or sideways, whichever keeps the picture
- * larger. A few rounds at most; the result is the last fit.
+ * larger. A few rounds at most. Finally the picture slides toward covering the view (coverView), as far as every
+ * mark stays clear, so it doesn't end mid-view.
  */
 export function fitClear(
   box: Box,
@@ -179,5 +180,38 @@ export function fitClear(
     b = { x0: b.x0 - grow.right, x1: b.x1 + grow.left, y0: b.y0 - grow.down, y1: b.y1 + grow.up }
     f = fit(b)
   }
-  return f
+  const target = coverView(f, viewW, viewH)
+  const at = (t: number): Fit => ({ ...f, left: f.left + (target.left - f.left) * t, top: f.top + (target.top - f.top) * t })
+  const clearAt = (t: number) => {
+    const g = at(t)
+    return marks.every((m) => {
+      const p = screenOf(m, g)
+      return p.x >= 0 && p.x <= viewW && p.y >= 0 && p.y <= viewH && overlays.every((o) => !under(p, m.r, o))
+    })
+  }
+  if (clearAt(1)) return target
+  // Slide part of the way: the largest step that keeps every mark on screen and clear.
+  let lo = 0
+  let hi = 1
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2
+    if (clearAt(mid)) lo = mid
+    else hi = mid
+  }
+  return at(lo)
+}
+
+/**
+ * Slide the picture so it reaches every edge of the view it is big enough to cover (no empty band past the
+ * picture's edge); on an axis where it is smaller than the view, centre it. Never resizes, so whatever the fit
+ * kept visible stays inside the picture and on screen.
+ */
+export function coverView<F extends { imgW: number; imgH: number; left: number; top: number }>(
+  f: F,
+  viewW: number,
+  viewH: number,
+): F {
+  const place = (pos: number, size: number, view: number) =>
+    size >= view ? Math.min(0, Math.max(view - size, pos)) : (view - size) / 2
+  return { ...f, left: place(f.left, f.imgW, viewW), top: place(f.top, f.imgH, viewH) }
 }

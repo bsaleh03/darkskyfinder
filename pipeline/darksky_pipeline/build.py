@@ -22,14 +22,15 @@ from .dedupe import apply_display_names, merge_duplicates
 from .extract import THEMES, connect, extract_theme
 from .features import GlareModel, HorizonModel, building_points
 from .geo import Projector
-from .roads import build_road_network, find_viewing_point, parking_points
-from .search_index import build_search_index, search_rows
+from .roads import build_road_network, find_entry, find_viewing_point, parking_points
+from .search_index import address_blocks, build_search_index, search_rows
 from .spots import build_candidates
 from .tiles import basemap_extract_commands, run_commands
 
 log = logging.getLogger("darksky_pipeline")
 
 TILE_TOOLS = ("pmtiles",)
+SEARCH_THEMES = ("places", "addresses", "division_areas")
 
 
 def check_tile_tools() -> None:
@@ -52,11 +53,19 @@ class BuildSummary:
     out_dir: Path | None = None
 
 
+def _write_search_index(frames: dict, out_dir: Path, key: str) -> None:
+    rows = search_rows(frames["places"], frames["division_areas"])
+    streets, blocks = address_blocks(frames["addresses"])
+    build_search_index(rows, out_dir / f"search_{key}.sqlite", streets, blocks)
+    log.info("search index: %d rows, %d streets, %d address blocks", len(rows), len(streets), len(blocks))
+
+
 def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curated_path: Path | None = None,
               source_root: str = OVERTURE_S3_ROOT, cache_dir: Path | None = None,
               count_range: tuple[int, int] | None = None, skip_tiles: bool = False, strict: bool = True,
-              tiles_release: str | None = None) -> BuildSummary:
-    if not skip_tiles:
+              tiles_release: str | None = None, search_only: bool = False) -> BuildSummary:
+    """search_only: rebuild just search_<metro>.sqlite (no darkness, spots, checks or tiles)."""
+    if not skip_tiles and not search_only:
         check_tile_tools()
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -65,9 +74,13 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
 
     log.info("extracting Overture %s for %s", release, metro.key)
     con = connect()
+    themes = SEARCH_THEMES if search_only else THEMES
     frames = {k: extract_theme(con, k, metro.bbox, release, source_root=source_root, cache_dir=cache_dir)
-              for k in THEMES}
+              for k in themes}
     con.close()
+    if search_only:
+        _write_search_index(frames, out_dir, metro.key)
+        return BuildSummary(metro=metro.key, spots=0, out_dir=out_dir)
 
     log.info("building darkness grid")
     grid = build_darkness_grid(Path(viirs_path), metro.bbox, metro.utm_epsg)
@@ -96,7 +109,9 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
             dropped.append(c.id)
             continue
         spots.append(assemble_spot(c, vp, glare_model.at(vp.x, vp.y), horizon_model.at(vp.x, vp.y),
-                                   amenity_finder.near(vp.x, vp.y), curated.get(c.id)))
+                                   amenity_finder.near(vp.x, vp.y), curated.get(c.id),
+                                   entry=find_entry(c.area, roads, parking_xy, projector, (vp.x, vp.y),
+                                                    region=region)))
     log.info("%d spots, %d dropped (no drivable access)", len(spots), len(dropped))
 
     spots, merged = merge_duplicates(spots)
@@ -109,9 +124,7 @@ def run_build(metro: Metro, release: str, viirs_path: Path, out_dir: Path, curat
     doc = build_spots_document(metro.key, release, spots)
     write_spots_json(doc, out_dir / f"spots_{metro.key}.json")
 
-    rows = search_rows(frames["places"], frames["addresses"], frames["division_areas"])
-    build_search_index(rows, out_dir / f"search_{metro.key}.sqlite")
-    log.info("search index: %d rows", len(rows))
+    _write_search_index(frames, out_dir, metro.key)
 
     results = run_checks(doc, grid, metro, projector, count_range or config.SPOT_COUNT_RANGE[metro.key])
     for r in results:
@@ -138,6 +151,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--cache", default="data/raw")
     ap.add_argument("--curated", default=None, help="default: curated/<metro>.yaml")
     ap.add_argument("--skip-tiles", action="store_true")
+    ap.add_argument("--search-only", action="store_true",
+                    help="rebuild only search_<metro>.sqlite from the cached extract (implies --skip-tiles)")
     ap.add_argument("--no-strict", action="store_true", help="report failed checks without failing")
     ap.add_argument("--tiles-release", default=None, help="Overture tiles release folder if it differs")
     args = ap.parse_args(argv)
@@ -154,7 +169,8 @@ def main(argv: list[str] | None = None) -> None:
     summary = run_build(metro, args.release, Path(args.viirs), Path(args.out) / metro.key,
                         curated_path=curated_path,
                         cache_dir=Path(args.cache) / metro.key / args.release,
-                        skip_tiles=args.skip_tiles, strict=not args.no_strict, tiles_release=args.tiles_release)
+                        skip_tiles=args.skip_tiles or args.search_only, strict=not args.no_strict,
+                        tiles_release=args.tiles_release, search_only=args.search_only)
     print(f"{summary.metro}: {summary.spots} spots -> {summary.out_dir}")
 
 

@@ -96,7 +96,7 @@ def find_spots(store: DataStore, routing, forecast, q: SpotsQuery,
             pool.append((km, s))
     pool = _prefilter(pool, q)
 
-    minutes, estimated = routing.drive_minutes((q.lon, q.lat), [(s["id"], s["lon"], s["lat"]) for s in pool])
+    minutes, estimated = routing.drive_minutes((q.lon, q.lat), [(s["id"], *_route_point(s)) for s in pool])
     reachable = [s for s in pool if s["id"] in minutes and minutes[s["id"]] <= q.max_drive]
 
     window = dark_window(q.lat, q.lon, night, tz)
@@ -226,3 +226,11 @@ def _sky_label(sqm: float | None) -> str | None:
         if sqm >= threshold:
             return label
     return "Milky Way not visible"
+
+
+def _route_point(spot: dict) -> tuple[float, float]:
+    """(lon, lat) to route to: the spot's road/parking entrance, else its viewing point."""
+    entry = spot.get("entry")
+    if entry:
+        return entry["lon"], entry["lat"]
+    return spot["lon"], spot["lat"]

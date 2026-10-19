@@ -1,5 +1,5 @@
 // scripts/upload_tiles.sh against a stub rclone: the allow-list must come from the manifest (level-0 widths and
-// the level >= 1 base and base_red tiles) and nothing else in web/ may go up.
+// the level >= 1 tiles of base, base_red, base_glow and base_glow_red) and nothing else in web/ may go up.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -48,7 +48,7 @@ beforeAll(() => {
     for (const f of manifestFiles(m)) writeFileSync(join(dir, f), 'x')
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(m, null, 2) + '\n')
     // Strays that must never go up.
-    for (const f of ['base.png', 'base_L2_0_0.webp', 'notes.txt', 'glow_L0_0_0.webp', 'glow_L1_0_0.webp', 'glow_red_L1_1_1.webp']) writeFileSync(join(dir, f), 'x')
+    for (const f of ['base.png', 'base_L2_0_0.webp', 'notes.txt', 'glow_L0_0_0.webp', 'glow_L1_0_0.webp', 'glow_red_L1_1_1.webp', 'glow_874.webp', 'glow_red_3496.webp', 'base_glow_L0_0_0.webp']) writeFileSync(join(dir, f), 'x')
   }
 })
 afterAll(() => {
@@ -56,7 +56,7 @@ afterAll(() => {
 })
 
 describe('upload_tiles.sh --dry-run (stub rclone)', () => {
-  it('uploads exactly the manifest-derived files: 44 for both regions', () => {
+  it('uploads exactly the manifest-derived files: 60 for both regions', () => {
     const fwd = (p: string) => p.replace(/\\/g, '/')
     const r = spawnSync(
       BASH,
@@ -66,7 +66,7 @@ describe('upload_tiles.sh --dry-run (stub rclone)', () => {
     expect(r.stderr).toBe('')
     expect(r.status).toBe(0)
     const lines = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('FILE '))
-    expect(lines).toHaveLength(44)
+    expect(lines).toHaveLength(60)
     const expected: string[] = []
     for (const [metro, extent] of Object.entries(extents)) {
       for (const f of manifestFiles(buildManifest(metro, extent))) expected.push(`r2:darksky-tiles/maps/${metro}/${f}`)
@@ -78,8 +78,8 @@ describe('upload_tiles.sh --dry-run (stub rclone)', () => {
       expect(dry).toBe('dry=1')
       expect(header).toBe(file.endsWith('.json') ? 'Cache-Control: public, max-age=300' : 'Cache-Control: public, max-age=86400')
     }
-    expect(r.stdout).toContain('== se_mi (22 files)')
-    expect(r.stdout).toContain('== bay_area (22 files)')
-    expect(r.stdout).toContain('44 files')
+    expect(r.stdout).toContain('== se_mi (30 files)')
+    expect(r.stdout).toContain('== bay_area (30 files)')
+    expect(r.stdout).toContain('60 files')
   })
 })

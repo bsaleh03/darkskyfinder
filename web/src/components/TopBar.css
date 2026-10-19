@@ -9,7 +9,7 @@
 .top-bar-main {
   display: flex;
   flex: 1 1 240px;
-  align-items: center;
+  align-items: flex-start; /* a search message under the box keeps the locate button level with the box */
   gap: 8px;
   min-width: 0;
 }

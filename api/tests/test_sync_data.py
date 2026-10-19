@@ -17,7 +17,7 @@ def test_sync_copies_three_files_per_metro(tmp_path):
 
 def test_sync_rejects_old_schema(tmp_path):
     src = build_data_dir(tmp_path / "out", schema_version=2)
-    with pytest.raises(SystemExit, match=r"schema_version 2 != 4"):
+    with pytest.raises(SystemExit, match=r"schema_version 2 != 5"):
         sync(src, tmp_path / "data", ["test"])
 
 

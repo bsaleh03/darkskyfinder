@@ -40,6 +40,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: flex-start; /* a search message under the box must not stretch the location button */
 }
 
 .welcome-search > :first-child {

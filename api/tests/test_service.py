@@ -117,7 +117,7 @@ def test_cloudy_night_is_poor(store):
 def test_prefilter_caps_and_skips_far(store):
     routing = FakeRouting(MINUTES)
     run(store, routing=routing, max_drive=15)
-    assert "sp_far" not in routing.calls[0][1]  # 28 km > 15 min × 1.2 km/min
+    assert "sp_far" not in routing.calls[0][1]  # 28 km > 15 min × 1.5 km/min
 
 
 def test_start_sqm_nan_is_safe(tmp_path):
@@ -342,3 +342,54 @@ def test_state_border_exclude_filters(state_store):
     assert "sp_oh" not in ids and "sp_ca" in ids and "sp_hudson" in ids
     assert "sp_oh" not in routing.calls[0][1]
     assert "sp_oh" in {s["id"] for s in run(state_store, routing=FakeRouting(STATE_MINUTES))["spots"]}
+
+
+ENTRY = {"lon": -84.251, "lat": 41.831}
+
+
+def _entry_store(tmp_path):
+    from darksky_api.data import DataStore
+
+    spots = [dict(x) for x in SPOTS]
+    spots[0]["entry"] = ENTRY
+    return DataStore.load(build_data_dir(tmp_path, spots=spots), {"test": TEST_METRO})
+
+
+def test_routes_to_entry_when_present(tmp_path):
+    routing = FakeRouting(MINUTES)
+    run(_entry_store(tmp_path), routing=routing)
+    dests = {i: (lon, lat) for i, lon, lat in routing.dests[0]}
+    assert dests["sp_hudson"] == (ENTRY["lon"], ENTRY["lat"])
+
+
+def test_routes_to_spot_point_without_entry(tmp_path):
+    routing = FakeRouting(MINUTES)
+    run(_entry_store(tmp_path), routing=routing)
+    dests = {i: (lon, lat) for i, lon, lat in routing.dests[0]}
+    assert dests["sp_camp"] == (-84.15, 41.78)
+
+
+def test_response_includes_entry(tmp_path):
+    r = run(_entry_store(tmp_path))
+    by_id = {s["id"]: s for s in r["spots"]}
+    assert by_id["sp_hudson"]["entry"] == ENTRY and by_id["sp_camp"]["entry"] is None
+
+
+def test_prefilter_reach_covers_fast_roads(tmp_path):
+    # A spot 1.3 × max_drive km away (straight line) that the router says is within max_drive must survive
+    # the prefilter: calibrated drives reach ~1.3+ km per minute of straight-line distance on freeways.
+    import math
+
+    from darksky_api.data import DataStore
+    from darksky_api.routing import haversine_km
+    from fixtures import make_spot
+
+    max_drive = 15
+    lon = CITY[0] - 1.3 * max_drive / (111.195 * math.cos(math.radians(CITY[1])))
+    assert haversine_km(CITY[0], CITY[1], lon, CITY[1]) == pytest.approx(1.3 * max_drive, rel=1e-3)
+    d = build_data_dir(tmp_path, spots=[make_spot("fast", "Freeway Park", lon, CITY[1], 20.5)])
+    st = DataStore.load(d, {"test": TEST_METRO})
+    routing = FakeRouting({"fast": 14.0})
+    r = run(st, routing=routing, max_drive=max_drive)
+    assert "fast" in routing.calls[0][1]
+    assert [s["id"] for s in r["spots"]] == ["fast"]

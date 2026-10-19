@@ -5,7 +5,7 @@ import { chooseLevel, chooseWidth, fitClear, frameView, visibleTiles, type Box, 
 import { placeLabels, type ScreenBox } from './labels'
 import { pinColor } from './pins'
 import { toFraction, type LonLat } from './projection'
-import { mapFileUrl, mapLevels, mapTileUrl, useMapManifest } from './useMapManifest'
+import { hasGlowComposite, mapFileUrl, mapLevels, mapTileUrl, useMapManifest, type MapTileKey } from './useMapManifest'
 import './StaticMap.css'
 
 export interface StaticMapProps {
@@ -22,7 +22,7 @@ export interface StaticMapProps {
 }
 
 export const ATTRIBUTION =
-  'Overture Maps Foundation · © OpenStreetMap contributors · TomTom · ESA WorldCover · VIIRS VNL (EOG / Colorado School of Mines)'
+  'Overture Maps Foundation · © OpenStreetMap contributors · TomTom · ESA WorldCover · VIIRS VNL (EOG / Colorado School of Mines) · Drive times & address lookup: openrouteservice.org'
 const UNAVAILABLE = 'Map unavailable right now'
 
 /** Pins and the start are fitted into the view minus this inset (CSS px) on every side. */
@@ -104,28 +104,39 @@ function useViewSize() {
   return { ref, size }
 }
 
+/** One picture file and whether it carries the glow (a base_glow picture, or the overlay of an older manifest). */
+type Pic = { src: string; glow: boolean }
+
 /**
- * The whole picture (base or glow) of one variant (metro + normal/red; the parent keys it by that). A sharper file
- * for the same variant loads on top of the one on screen, which goes only once the new one has loaded: the picture
- * never blanks while it sharpens. A failed upgrade keeps the current picture; a failed current picture is reported.
+ * The whole level-0 picture of one variant (metro + normal/red; the parent keys it by that). A different file for the
+ * same variant (sharper, or the glow switched) loads on top of the one on screen, which goes only once the new one has
+ * loaded: the picture never blanks. On first paint (nothing on screen yet) `first`, the smallest file, comes first and
+ * the chosen one loads over it. A failed file is reported with the one on screen (`onError`); a failed file that is
+ * not the target only drops out (the target shows alone), and a failed upgrade keeps the current picture.
  */
-function BasePicture({ src, onError }: { src: string; onError(src: string): void }) {
-  const [shown, setShown] = useState(src)
+function Picture({ pic, first, onError }: { pic: Pic; first?: Pic; onError(failed: Pic, shown: Pic): void }) {
+  const [shown, setShown] = useState<Pic>(first ?? pic)
   const [failed, setFailed] = useState<string | null>(null)
-  const pending = src !== shown && src !== failed ? src : null
+  const pending = pic.src !== shown.src && pic.src !== failed ? pic : null
   return (
     <>
       {[shown, pending].map(
-        (s) =>
-          s && (
+        (p) =>
+          p && (
             <img
-              key={s}
+              key={p.src}
               className="static-map-picture"
-              src={s}
+              src={p.src}
               alt=""
               draggable={false}
-              onLoad={s === pending ? () => setShown(s) : undefined}
-              onError={() => (s === shown ? onError(s) : setFailed(s))}
+              onLoad={p === pending ? () => setShown(p) : undefined}
+              onError={() => {
+                if (p === pending) {
+                  setFailed(p.src)
+                  onError(p, shown)
+                } else if (pending) setShown(pending)
+                else onError(p, p)
+              }}
             />
           ),
       )}
@@ -135,21 +146,41 @@ function BasePicture({ src, onError }: { src: string; onError(src: string): void
 
 /**
  * One tile of a level >= 1, laid over the level-0 picture at its place (fractions of the picture, so it rides
- * along with the pins). Hidden until it has loaded, then faded in; a failed tile stays hidden (level 0 shows).
+ * along with the pins). Hidden until it has loaded, then faded in; a failed tile stays hidden (level 0 shows). A new
+ * file for the same place (the glow switched) loads hidden over the tile on screen and replaces it once loaded.
  */
 function Tile({ src, col, row, cols, rows }: { src: string; col: number; row: number; cols: number; rows: number }) {
-  const [state, setState] = useState<'loading' | 'loaded' | 'failed'>('loading')
-  if (state === 'failed') return null
+  const [shown, setShown] = useState<string | null>(null)
+  // A replacement appears at once (no fade from nothing over a picture that was already there).
+  const [swapped, setSwapped] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+  const pending = src !== shown && src !== failed ? src : null
+  const style = { left: pct(col / cols), top: pct(row / rows), width: pct(1 / cols), height: pct(1 / rows) }
   return (
-    <img
-      className={`static-map-tile${state === 'loaded' ? ' static-map-tile--loaded' : ''}`}
-      src={src}
-      alt=""
-      draggable={false}
-      style={{ left: pct(col / cols), top: pct(row / rows), width: pct(1 / cols), height: pct(1 / rows) }}
-      onLoad={() => setState('loaded')}
-      onError={() => setState('failed')}
-    />
+    <>
+      {[shown, pending].map(
+        (s) =>
+          s && (
+            <img
+              key={s}
+              className={`static-map-tile${s === shown ? ` static-map-tile--loaded${swapped ? ' static-map-tile--swapped' : ''}` : ''}`}
+              src={s}
+              alt=""
+              draggable={false}
+              style={style}
+              onLoad={
+                s === pending
+                  ? () => {
+                      setSwapped(shown !== null)
+                      setShown(s)
+                    }
+                  : undefined
+              }
+              onError={s === pending ? () => setFailed(s) : undefined}
+            />
+          ),
+      )}
+    </>
   )
 }
 
@@ -241,17 +272,22 @@ export function StaticMap(props: StaticMapProps) {
     if (!prev || prev.width !== width || prev.level !== level || prev.tiles.length !== tiles.length) setDetail(current)
   }
   const width = current?.width ?? null
-  const baseSrc = manifest && width ? mapFileUrl(manifest, red ? 'base_red' : 'base', width) : null
-  // The glow follows the base width; at level >= 1 it stays at the level-0 full width (its source data is coarser
-  // than that, so tiles would only cost bytes).
-  const glowSrc = manifest && width ? mapFileUrl(manifest, red ? 'glow_red' : 'glow', width) : null
   const grid = manifest && current ? mapLevels(manifest).find((l) => l.level === current.level) : undefined
+  // v3 manifests have the glow drawn into base_glow pictures; older ones lay a separate glow picture over the base.
+  const composite = manifest !== null && hasGlowComposite(manifest)
+  const plainKey = red ? 'base_red' : 'base'
+  const litKey = red ? 'base_glow_red' : 'base_glow'
+  const plainSrc = manifest && width ? mapFileUrl(manifest, plainKey, width) : null
+  // The glow picture: the composite, or (older manifests) the overlay, which follows the base width and at level >= 1
+  // stays at the level-0 full width.
+  const glowSrc = manifest && width ? mapFileUrl(manifest, composite ? litKey : red ? 'glow_red' : 'glow', width) : null
 
   // A failed picture shows the unavailable state until the file, the region or the start changes (a retry).
   const [broken, setBroken] = useState<{ src: string; at: string } | null>(null)
   const at = `${metro}|${start.lon},${start.lat}`
-  const unavailable = status === 'error' || (baseSrc !== null && broken?.src === baseSrc && broken.at === at)
-  // A failed glow hides the glow; pressing the toggle then retries it rather than leaving it "on" but empty.
+  const unavailable = status === 'error' || (plainSrc !== null && broken?.src === plainSrc && broken.at === at)
+  // A failed glow picture hides the glow (the plain base shows); pressing the toggle then retries it rather than
+  // leaving it "on" but empty.
   const [glowFailed, setGlowFailed] = useState<string | null>(null)
   const glowOk = glowSrc === null || glowFailed !== glowSrc
   const glowOn = glow && glowOk
@@ -259,6 +295,19 @@ export function StaticMap(props: StaticMapProps) {
     if (glow && !glowOk) setGlowFailed(null)
     else onToggleGlow()
   }
+  const lit = composite && glowOn
+  const picKey = lit ? litKey : plainKey
+  const pic: Pic | null = lit && glowSrc ? { src: glowSrc, glow: true } : plainSrc ? { src: plainSrc, glow: false } : null
+  // First paint: the smallest file of the same kind, then the chosen one over it.
+  const first: Pic | undefined = manifest
+    ? { src: mapFileUrl(manifest, picKey, Math.min(...manifest.widths)), glow: lit }
+    : undefined
+  const onPictureError = (failed: Pic, shown: Pic) => {
+    // A glow picture that failed on screen, or while replacing a picture without glow: show the plain base instead.
+    if (failed.glow && (failed.src === shown.src || !shown.glow)) setGlowFailed(failed.src)
+    else if (!failed.glow && failed.src === shown.src) setBroken({ src: failed.src, at })
+  }
+  const tileKey: MapTileKey = lit ? litKey : plainKey
 
   // Pin positions as fractions of the picture, so they ride along with its eased transition.
   const pos = (p: LonLat): CSSProperties => {
@@ -274,21 +323,22 @@ export function StaticMap(props: StaticMapProps) {
       </p>
       {!unavailable && (
         <>
-          {manifest && fit && baseSrc && (
+          {manifest && fit && pic && (
             <div
               className="static-map-image"
               style={{ width: fit.imgW, height: fit.imgH, transform: `translate(${fit.left}px, ${fit.top}px)` }}
             >
               {/* Keyed by variant: switching mode (e.g. red) mounts fresh images, so the previous picture never
-                  stays on screen while the new one downloads; the water color shows instead. */}
-              <BasePicture key={`${variant}|base`} src={baseSrc} onError={(src) => setBroken({ src, at })} />
+                  stays on screen while the new one downloads; the water color shows instead. Switching the glow
+                  keeps the variant: the picture on screen stays until the other one has loaded. */}
+              <Picture key={`${variant}|base`} pic={pic} first={first} onError={onPictureError} />
               {grid &&
                 current!.tiles.map((k) => {
                   const [col, row] = k.split('_').map(Number)
                   return (
                     <Tile
                       key={`${variant}|L${grid.level}|${k}`}
-                      src={mapTileUrl(manifest, red ? 'base_red' : 'base', grid.level, col, row)}
+                      src={mapTileUrl(manifest, tileKey, grid.level, col, row)}
                       col={col}
                       row={row}
                       cols={grid.cols}
@@ -296,8 +346,12 @@ export function StaticMap(props: StaticMapProps) {
                     />
                   )
                 })}
-              {glowOn && glowSrc && (
-                <BasePicture key={`${variant}|glow`} src={glowSrc} onError={() => setGlowFailed(glowSrc)} />
+              {!composite && glowOn && glowSrc && (
+                <Picture
+                  key={`${variant}|glow`}
+                  pic={{ src: glowSrc, glow: true }}
+                  onError={(failed, shown) => failed.src === shown.src && setGlowFailed(failed.src)}
+                />
               )}
               {placed.map(({ label }) => (
                 <span

@@ -4,18 +4,19 @@
 //   npm run render-maps -- --metro se_mi     # one region (repeatable; any key with pipeline/out/maps/<key>/)
 //
 // Needs the pipeline outputs first: pipeline/out/<metro>/basemap_<metro>_*.pmtiles and
-// pipeline/out/maps/<metro>/{extent.json,glow/L0.png,glow/L0_red.png,labels.json,borders.geojson}.
+// pipeline/out/maps/<metro>/{extent.json,glow/L0[_red].png,glow/L<l>_<c>_<r>[_red].png,labels.json,borders.geojson}.
 // Starts the Vite dev server (it serves the PMTiles from ../pipeline/out at /tiles and the map inputs from
 // ../pipeline/out/maps at /render-data, since /tiles/maps is shadowed by the rendered output) and renders the base
 // with MapLibre in headless Chromium at every level in extent.json `levels` (normal and red): level 0 = the whole
 // extent in one W x H canvas; level l >= 1 = 2^l x 2^l tiles, each W x H, the map centred on the tile's Web Mercator
 // bounds at the level-0 zoom + l (those tiles draw minor roads from one zoom earlier). Every picture's corners must
 // land within 2 px of its bounds. Then it writes to pipeline/out/maps/<metro>/web/: level 0 at full, 1/2 and 1/4 width
-// for base, base_red, glow and glow_red (glow from the pipeline's glow/L0*.png), every level >= 1 tile for base and
-// base_red only (the glow is level 0 only: its VIIRS source is coarser than level 0 full; the pipeline's glow/L1_*
-// PNGs are not used), plus labels.json and manifest.json (v2, see render/manifest.ts). Base is lossy WebP q82,
-// base_red lossless, glow lossy q90 with lossless alpha, glow_red near-lossless (lossless if that breaks the red check).
-// Red variants are checked pixel by pixel on the decoded files; any violation exits non-zero. Any MapLibre
+// and every level >= 1 tile for four kinds: base, base_red, and base_glow / base_glow_red = the base with the
+// pipeline's glow (glow/L0[_red].png at level 0, glow/L<l>_<c>_<r>[_red].png per tile) drawn over it at full
+// opacity, exactly as the app used to lay the separate glow picture over the base. Pre-compositing makes the glow
+// appear with the map instead of after it. Plus labels.json and manifest.json (v3, see render/manifest.ts). Base and
+// both composites are lossy WebP q82 (a red composite that breaks the red check goes up lossless instead), base_red
+// lossless. Red variants are checked pixel by pixel on the decoded files; any violation exits non-zero. Any MapLibre
 // source/tile error (missing PMTiles, failed borders.geojson) fails the run before anything is written for that region.
 import { chromium } from '@playwright/test'
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
@@ -34,14 +35,12 @@ const MAX_CORNER_PX = 2
 const ENCODE = {
   base: { quality: 82, effort: 6 },
   base_red: { lossless: true, effort: 6 },
-  // Lossy colour with lossless alpha: the alpha plane carries the glow's shape and is most of the bytes. A lower
-  // alphaQuality quantizes alpha into a few dozen levels and draws visible contour bands around the city cores
-  // (checked at 72 and 70); quality 90 colour shows no blocks. Less than half the near-lossless size at 1/2 width.
-  glow: { quality: 90, alphaQuality: 100, effort: 6 },
-  // Red stays near-lossless (quality 80 = the lightest preprocessing level, the smallest files on the real glow) so
-  // the decoded red check holds; a file that breaks it goes up lossless instead.
-  glow_red: { nearLossless: true, quality: 80, effort: 6 },
+  // Opaque composites: lossy like the base. On the real pictures lossy red stays inside the red rule after decoding
+  // (checked below on every file); one that does not goes up lossless instead.
+  base_glow: { quality: 82, effort: 6 },
+  base_glow_red: { quality: 82, effort: 6 },
 }
+const LOSSLESS = { lossless: true, effort: 6 }
 
 function parseArgs(argv) {
   const metros = []
@@ -144,11 +143,11 @@ async function writePictures(src, key, outputs, outDir, rc) {
     let enc = await encode(ENCODE[key])
     if (red) {
       let v = rc.redViolations(enc.data)
-      if (v > 0 && ENCODE[key].nearLossless) {
-        // Near-lossless preprocessing can move a clamped pixel (green or blue exactly half of red) one step
-        // over the line; this picture then goes up lossless instead.
-        console.log(`  red check ${file}: ${v} violating pixels after near-lossless, writing it lossless`)
-        enc = await encode({ lossless: true, effort: 6 })
+      if (v > 0 && !ENCODE[key].lossless) {
+        // Lossy coding can move a clamped pixel (green or blue exactly half of red) a step over the line; this
+        // picture then goes up lossless instead.
+        console.log(`  red check ${file}: ${v} violating pixels after lossy coding, writing it lossless`)
+        enc = await encode(LOSSLESS)
         v = rc.redViolations(enc.data)
       }
       violations += v
@@ -177,12 +176,18 @@ async function renderMetro(browser, origin, metro, mods) {
       for (let row = 0; row < rows; row++) tiles.push({ level, col, row, bounds: mods.sizes.tileBounds(bounds, level, col, row) })
     }
   }
-  // The glow is level 0 only.
-  const glowPng = (red) => join(dir, 'glow', `L0${red ? '_red' : ''}.png`)
+  // The pipeline's glow: level 0 (glow/L0[_red].png) and every tile (glow/L<l>_<c>_<r>[_red].png), each W x H.
+  const glowPng = (red, t = null) => join(dir, 'glow', `${t ? `L${t.level}_${t.col}_${t.row}` : 'L0'}${red ? '_red' : ''}.png`)
   for (const red of [false, true]) {
-    const m = await sharp(glowPng(red)).metadata()
-    if (m.width !== W || m.height !== H) throw new Error(`${glowPng(red)} is ${m.width}x${m.height}, expected ${W}x${H}`)
+    for (const t of [null, ...tiles]) {
+      const m = await sharp(glowPng(red, t)).metadata()
+      if (m.width !== W || m.height !== H) throw new Error(`${glowPng(red, t)} is ${m.width}x${m.height}, expected ${W}x${H}`)
+    }
   }
+  // The base with the glow drawn over it ("over" with the glow's own alpha, at full opacity: the look of the app's
+  // former glow <img> over the base <img>), as an opaque PNG at full size; writePictures resizes it per width.
+  const withGlow = (basePng, red, t = null) =>
+    sharp(basePng).composite([{ input: glowPng(red, t), blend: 'over' }]).removeAlpha().png({ compressionLevel: 1 }).toBuffer()
 
   // Every render must succeed before anything is written for this region.
   const t0 = Date.now()
@@ -198,6 +203,13 @@ async function renderMetro(browser, origin, metro, mods) {
     }
     renders[key] = { level0: l0.png, tiles: list }
   }
+  for (const red of [false, true]) {
+    const from = renders[red ? 'base_red' : 'base']
+    renders[red ? 'base_glow_red' : 'base_glow'] = {
+      level0: await withGlow(from.level0, red),
+      tiles: await Promise.all(from.tiles.map((png, i) => withGlow(png, red, tiles[i]))),
+    }
+  }
   console.log(`  renders: ${((Date.now() - t0) / 1000).toFixed(0)} s`)
 
   const outDir = join(dir, 'web')
@@ -211,13 +223,11 @@ async function renderMetro(browser, origin, metro, mods) {
   const results = {}
   let violations = 0
   for (const key of mods.manifest.KEYS) {
-    const red = key.endsWith('_red')
-    const level0 = key.startsWith('base') ? renders[key].level0 : glowPng(red)
+    const level0 = renders[key].level0
     const l0 = sizes.map(({ w, h }) => ({ file: manifest.files[key].replace('{w}', String(w)), w, h }))
     const r0 = await writePictures(level0, key, l0, outDir, rc)
     results[key] = r0.out
     violations += r0.violations
-    if (!mods.manifest.TILE_KEYS.includes(key)) continue
     for (const [i, t] of tiles.entries()) {
       const src = renders[key].tiles[i]
       const file = mods.manifest.tileFile(manifest.tiles[key], t.level, t.col, t.row)
@@ -245,14 +255,9 @@ async function renderMetro(browser, origin, metro, mods) {
     tiles.filter((t) => t.level === level).reduce((s, t) => s + bytes[mods.manifest.tileFile(manifest.tiles[key], t.level, t.col, t.row)], 0)
   const fullW = W
   const l0 = (key) => bytes[manifest.files[key].replace('{w}', String(fullW))]
-  const normal = l0('base') + l0('glow') + labelsBytes
-  const redMode = l0('base_red') + l0('glow_red') + labelsBytes
-  console.log(`  normal mode, level 0 full size (base + glow + labels): ${mb(normal)}`)
-  console.log(`  red mode, level 0 full size (base_red + glow_red + labels): ${mb(redMode)}`)
+  console.log(`  level 0 full size: ${mods.manifest.KEYS.map((k) => `${k} ${kb(l0(k))}`).join(', ')}`)
   for (const { level } of tileLevels) {
-    console.log(
-      `  level ${level} all tiles: base ${mb(sum('base', level))}, base_red ${mb(sum('base_red', level))}`,
-    )
+    console.log(`  level ${level} all tiles: ${mods.manifest.KEYS.map((k) => `${k} ${mb(sum(k, level))}`).join(', ')}`)
   }
   const count = Object.values(results).reduce((n, l) => n + l.length, 0) + 2
   console.log(`  region total: ${count} files, ${mb(total)}`)

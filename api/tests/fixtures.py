@@ -21,11 +21,11 @@ RES = 500.0
 
 def make_spot(id_, name, lon, lat, sqm, badge="check_hours", horizon="partial", penalty=0.0,
               unavailable=False, display_name=None, area=None,
-              country="US", recommended=False, sources=None, region="US-MI"):
+              country="US", recommended=False, sources=None, region="US-MI", entry=None):
     return {
         "id": id_, "name": name, "display_name": display_name or name, "area": area, "country": country, "region": region,
         "recommended": recommended, "sources": sources or [],
-        "category": "park", "lon": lon, "lat": lat, "sqm": sqm, "bortle": 4,
+        "category": "park", "lon": lon, "lat": lat, "entry": entry, "sqm": sqm, "bortle": 4,
         "sky_label": "Milky Way vivid" if sqm >= 21.3 else "Milky Way not visible",
         "radiance": 0.2,
         "glare": {"buildings_1km": 0, "highway_m": None, "penalty": penalty},
@@ -57,6 +57,37 @@ SEARCH_ROWS = [
 ]
 
 
+# Compact address index, same schema as the pipeline's search_index.build_search_index:
+# streets (id, normalized text, display) and blocks (street_id, lo, hi, lo point, hi point) in degrees.
+STREETS = [
+    (0, "main st testville mi 49999", "Main St, Testville"),
+    (1, "n main st hudson mi 49247", "N Main St, Hudson"),
+    (2, "lakeview rd testville mi 49999", "Lakeview Rd, Testville"),
+]
+BLOCKS = [
+    (0, 100, 198, 42.0, -84.05, 42.001, -84.052),
+    (0, 200, 250, 42.002, -84.053, 42.003, -84.054),
+    (1, 1000, 1090, 41.85, -84.35, 41.86, -84.35),
+    (2, 7, 7, 41.86, -84.25, 41.86, -84.25),
+]
+
+
+def write_address_tables(con: sqlite3.Connection, streets=STREETS, blocks=BLOCKS) -> None:
+    con.execute("CREATE VIRTUAL TABLE streets USING fts5(text, content='', detail=none, "
+                "tokenize='unicode61 remove_diacritics 2')")
+    con.execute("CREATE TABLE street_names (id INTEGER PRIMARY KEY, display TEXT NOT NULL)")
+    for sid, text, display in streets:
+        con.execute("INSERT INTO streets (rowid, text) VALUES (?, ?)", (sid, text))
+        con.execute("INSERT INTO street_names (id, display) VALUES (?, ?)", (sid, display))
+    con.execute("CREATE TABLE blocks (street_id INTEGER NOT NULL, lo INTEGER NOT NULL, hi INTEGER NOT NULL, "
+                "lat_lo INTEGER NOT NULL, lon_lo INTEGER NOT NULL, dlat_hi INTEGER NOT NULL, "
+                "dlon_hi INTEGER NOT NULL, PRIMARY KEY (street_id, lo)) WITHOUT ROWID")
+    e5 = lambda v: round(v * 1e5)  # noqa: E731
+    con.executemany("INSERT INTO blocks VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [(sid, lo, hi, e5(alo), e5(olo), e5(ahi) - e5(alo), e5(ohi) - e5(olo))
+                     for sid, lo, hi, alo, olo, ahi, ohi in blocks])
+
+
 def _write_grid(path: Path) -> None:
     fwd = Transformer.from_crs(4326, EPSG, always_xy=True)
     w, s, e, n = TEST_METRO.bbox
@@ -78,11 +109,12 @@ def _write_search(path: Path) -> None:
     con.execute("CREATE VIRTUAL TABLE search USING fts5(name, kind UNINDEXED, lat UNINDEXED, lon UNINDEXED, "
                 "tokenize='unicode61 remove_diacritics 2')")
     con.executemany("INSERT INTO search (name, kind, lat, lon) VALUES (?, ?, ?, ?)", SEARCH_ROWS)
+    write_address_tables(con)
     con.commit()
     con.close()
 
 
-def build_data_dir(root: Path, spots=None, schema_version: int = 4) -> Path:
+def build_data_dir(root: Path, spots=None, schema_version: int = 5) -> Path:
     d = root / TEST_METRO.key
     d.mkdir(parents=True, exist_ok=True)
     doc = {"schema_version": schema_version, "metro": "test", "release": "2099-01-01.0",

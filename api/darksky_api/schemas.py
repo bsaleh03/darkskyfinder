@@ -1,6 +1,8 @@
 """Response models (documented in /docs; validate the service output shape)."""
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -19,6 +21,7 @@ class SearchHit(BaseModel):
     lat: float
     lon: float
     metro: str
+    source: Literal["overture", "openrouteservice"]
 
 
 class Health(BaseModel):
@@ -113,6 +116,11 @@ class Source(BaseModel):
     url: str
 
 
+class Entry(BaseModel):
+    lon: float
+    lat: float
+
+
 class Spot(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str
@@ -127,6 +135,7 @@ class Spot(BaseModel):
     category: str
     lon: float
     lat: float
+    entry: Entry | None = None
     sqm: float
     bortle: int
     sky_label: str

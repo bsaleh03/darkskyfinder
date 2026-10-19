@@ -24,7 +24,8 @@ export function SpotList({ spots, selectedId, homeSqm, homeLabel, timezone, onTo
     if (!present) return
     const cards = box.current?.querySelectorAll<HTMLElement>('[data-spot-id]') ?? []
     const el = [...cards].find((c) => c.dataset.spotId === selectedId)
-    el?.scrollIntoView?.({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' })
+    // Bring the opened card to the top of the screen so its Directions and hours are in view.
+    el?.scrollIntoView?.({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' })
   }, [selectedId, present])
 
   return (

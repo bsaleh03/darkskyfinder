@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { chooseLevel, chooseWidth, fitBox, frameView, visibleTiles } from '../../src/map/framing'
+import { chooseLevel, chooseWidth, coverView, fitBox, fitClear, frameView, visibleTiles } from '../../src/map/framing'
 import { toFraction } from '../../src/map/projection'
 
 const B: [number, number, number, number] = [-86.9, 41.65, -82.4, 45.9]
@@ -94,4 +94,25 @@ test('visibleTiles: a view past the picture edges is clipped to the picture', ()
   ])
   expect(visibleTiles(1, 2, 2, { x0: 1.2, y0: 0.2, x1: 1.5, y1: 0.4 })).toEqual([])
   expect(visibleTiles(0, 1, 1, { x0: -1, y0: -1, x1: 2, y1: 2 })).toEqual([{ col: 0, row: 0 }])
+})
+
+test('coverView: picture taller than the view never leaves a gap below or above it', () => {
+  // The 522x1067 desktop pane from the bug report: picture 1115x1459 placed with its bottom at y=701.
+  const f = coverView({ imgW: 1115, imgH: 1459, left: -205, top: -758 }, 522, 1067)
+  expect(f.top).toBe(1067 - 1459)
+  expect(f.left).toBe(-205)
+  expect(coverView({ imgW: 1115, imgH: 1459, left: -205, top: 40 }, 522, 1067).top).toBe(0)
+})
+
+test('coverView: picture narrower than the view is centred on that axis, size unchanged', () => {
+  const f = coverView({ imgW: 400, imgH: 600, left: 300, top: -100 }, 800, 500)
+  expect(f.left).toBe(200)
+  expect(f.top).toBe(-100)
+  expect(f.imgW).toBe(400)
+})
+
+test('fitClear: spots near the picture south edge in a tall view leave no empty band below the picture', () => {
+  // Tall, narrow view; the box hugs the bottom of the picture, so a centred contain-fit would end the picture mid-view.
+  const f = fitClear({ x0: 0.3, y0: 0.6, x1: 0.7, y1: 0.98 }, 500, 1000, 0, 1.3, [{ x: 0.5, y: 0.9, r: 10 }], [])
+  expect(f.top + f.imgH).toBeGreaterThanOrEqual(1000)
 })
