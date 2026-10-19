@@ -30,6 +30,8 @@ python -m darksky_pipeline.build --metro bay_area --release <R> --viirs data/vii
 Outputs land in `out/<metro>/`: `spots_<metro>.json`, `darkness_<metro>.npz`, `search_<metro>.sqlite`,
 `basemap_<metro>_<theme>.pmtiles`.
 Use `--skip-tiles` for fast iterations and `--no-strict` to see failing checks without aborting.
+Use `--search-only` to rebuild just `search_<metro>.sqlite` from the cached extract (places, areas and the
+compact street-address index: one row per street and per 100-number block, which the API interpolates).
 Sanity checks run before the tile step, so a failing strict build stops before the slow tile extraction.
 
 ## Tools

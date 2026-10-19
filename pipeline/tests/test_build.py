@@ -1,5 +1,6 @@
 import json
 import math
+import sqlite3
 
 import pytest
 
@@ -81,6 +82,31 @@ def test_search_index_built(built):
     _, _, out = built
     assert query(out / "search_test.sqlite", "main st") == []
     assert query(out / "search_test.sqlite", "testville")[0]["kind"] == "locality"
+    con = sqlite3.connect(out / "search_test.sqlite")
+    try:
+        displays = {d for (d,) in con.execute("SELECT display FROM street_names")}
+        assert displays == {"Main St, Testville", "Lakeview Rd, Hudson Township"}
+        assert con.execute("SELECT COUNT(*) FROM blocks").fetchone() == (2,)
+    finally:
+        con.close()
+
+
+def test_search_only_rebuilds_just_the_search_index(overture_root, viirs_path, tmp_path):
+    summary = run_build(METRO, RELEASE, viirs_path, tmp_path, source_root=overture_root.as_posix(),
+                        skip_tiles=True, search_only=True)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["search_test.sqlite"]
+    assert summary.spots == 0 and summary.checks == []
+    assert query(tmp_path / "search_test.sqlite", "testville")[0]["kind"] == "locality"
+
+
+def test_search_only_cli_flag(monkeypatch, tmp_path):
+    from darksky_pipeline import build
+
+    seen = {}
+    monkeypatch.setattr(build, "run_build", lambda *a, **kw: seen.update(kw) or build.BuildSummary("se_mi", 0))
+    build.main(["--metro", "se_mi", "--release", "r", "--viirs", "v.tif", "--out", str(tmp_path),
+                "--curated", __file__, "--search-only"])
+    assert seen["search_only"] is True and seen["skip_tiles"] is True
 
 
 # --- I9: tile tooling checked up front; checks run before tiles ------------------

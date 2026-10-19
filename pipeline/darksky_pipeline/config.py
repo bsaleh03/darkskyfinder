@@ -149,8 +149,3 @@ BORDER_LAND_SLACK_DEG = 0.003  # land shapes grown ~300 m before cutting, so lan
 # Region areas include their share of the Great Lakes, so lakes/rivers crossed by a border are cut out too;
 # smaller water (ponds) is ignored so state lines are not broken by tiny gaps.
 BORDER_WATER_MIN_KM2 = 1.0
-
-# --- Search -------------------------------------------------------------------
-# Street addresses are excluded so each metro's index stays small enough to ship
-# with the API (git + Render); users can still drop a pin for an exact start.
-SEARCH_INCLUDE_ADDRESSES = False
