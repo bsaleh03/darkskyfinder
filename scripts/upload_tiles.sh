@@ -7,6 +7,7 @@
 # Usage: scripts/upload_tiles.sh [--dry-run]
 # Requires an rclone remote named "r2" (see README: `rclone config`, provider Cloudflare).
 # Credentials live in your rclone config; this script never reads or prints them.
+# --s3-no-check-bucket: a token scoped to the bucket may not create or list buckets; the bucket already exists.
 # MAPS_DIR overrides pipeline/out/maps (tests).
 set -euo pipefail
 
@@ -75,7 +76,7 @@ for m in "${METROS[@]}"; do
   # Explicit includes plus a final catch-all exclude: nothing else in web/ can go up. The manifest and labels
   # may change on a re-render, so browsers recheck them after 5 minutes; the pictures keep for a day.
   echo "== $m (${#files[@]} files) -> r2:$BUCKET/maps/$m/"
-  rclone copy "$dir" "r2:$BUCKET/maps/$m/" "${json[@]}" --exclude "*"     --header-upload "Cache-Control: public, max-age=300" --progress ${DRY[@]+"${DRY[@]}"}
-  rclone copy "$dir" "r2:$BUCKET/maps/$m/" "${webp[@]}" --exclude "*"     --header-upload "Cache-Control: public, max-age=86400" --progress ${DRY[@]+"${DRY[@]}"}
+  rclone copy "$dir" "r2:$BUCKET/maps/$m/" --s3-no-check-bucket "${json[@]}" --exclude "*"     --header-upload "Cache-Control: public, max-age=300" --progress ${DRY[@]+"${DRY[@]}"}
+  rclone copy "$dir" "r2:$BUCKET/maps/$m/" --s3-no-check-bucket "${webp[@]}" --exclude "*"     --header-upload "Cache-Control: public, max-age=86400" --progress ${DRY[@]+"${DRY[@]}"}
 done
 echo "Done: $total files${DRY[@]+ (dry run)}."
