@@ -1,6 +1,6 @@
 [
   {
-    "AllowedOrigins": ["https://darksky-web.onrender.com", "http://localhost:5173"],
+    "AllowedOrigins": ["https://darksky-web-8vxg.onrender.com", "http://localhost:5173"],
     "AllowedMethods": ["GET", "HEAD"],
     "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
     "ExposeHeaders": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
